@@ -18,7 +18,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     ui->tabWidget->setTabsClosable(true);
     ui->tabWidget->setMovable(true);
-
+    m_settings = loadSettings();   // ← загрузить при старте
     connect(ui->tabWidget, &QTabWidget::tabCloseRequested,
             this, &MainWindow::closeTab);
     connect(ui->tabWidget, &QTabWidget::currentChanged,
@@ -97,6 +97,7 @@ void MainWindow::showSettings()
     SettingsDialog dlg(m_settings, this);
     if (dlg.exec() == QDialog::Accepted) {
         m_settings = dlg.settings();
+        saveSettings(m_settings);
         // TODO: применить настройки к открытым вкладкам
     }
 }

@@ -19,6 +19,7 @@ set(PROJECT_SOURCES
         mainwindow.cpp
         mainwindow.h
         settings.h
+        settings.cpp
         settingsdialog.cpp
         settingsdialog.h
         mainwindow.ui
