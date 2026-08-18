@@ -1,9 +1,9 @@
 #include "mainwindow.h"
 #include "settingsdialog.h"
+#include "editorwidget.h"       // новый заголовок
 #include "./ui_mainwindow.h"
 
 #include <QTabWidget>
-#include <QTextEdit>
 #include <QFileDialog>
 #include <QFile>
 #include <QTextStream>
@@ -18,7 +18,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     ui->tabWidget->setTabsClosable(true);
     ui->tabWidget->setMovable(true);
-    m_settings = loadSettings();   // ← загрузить при старте
+    m_settings = loadSettings();
+
     connect(ui->tabWidget, &QTabWidget::tabCloseRequested,
             this, &MainWindow::closeTab);
     connect(ui->tabWidget, &QTabWidget::currentChanged,
@@ -44,9 +45,10 @@ void MainWindow::openFile()
     if (filePath.isEmpty())
         return;
 
+    // Проверяем, не открыт ли уже файл
     for (int i = 0; i < ui->tabWidget->count(); ++i) {
-        QTextEdit *editor = qobject_cast<QTextEdit*>(ui->tabWidget->widget(i));
-        if (editor && editor->property("filePath").toString() == filePath) {
+        EditorWidget *widget = qobject_cast<EditorWidget*>(ui->tabWidget->widget(i));
+        if (widget && widget->filePath() == filePath) {
             ui->tabWidget->setCurrentIndex(i);
             return;
         }
@@ -68,9 +70,13 @@ void MainWindow::addTab(const QString &filePath)
     QString content = in.readAll();
     file.close();
 
-    QTextEdit *editor = new QTextEdit(this);
+    // Создаём составной редактор
+    EditorWidget *editor = new EditorWidget(this);
     editor->setPlainText(content);
-    editor->setProperty("filePath", filePath);
+    editor->setFilePath(filePath);
+
+    // Применяем текущие настройки
+    editor->applySettings(m_settings);
 
     QFileInfo info(filePath);
     int index = ui->tabWidget->addTab(editor, info.fileName());
@@ -98,7 +104,17 @@ void MainWindow::showSettings()
     if (dlg.exec() == QDialog::Accepted) {
         m_settings = dlg.settings();
         saveSettings(m_settings);
-        // TODO: применить настройки к открытым вкладкам
+        applySettingsToAllTabs();   // применяем настройки немедленно
+    }
+}
+
+void MainWindow::applySettingsToAllTabs()
+{
+    for (int i = 0; i < ui->tabWidget->count(); ++i) {
+        EditorWidget *editor = qobject_cast<EditorWidget*>(ui->tabWidget->widget(i));
+        if (editor) {
+            editor->applySettings(m_settings);
+        }
     }
 }
 
@@ -110,8 +126,9 @@ void MainWindow::updateStatusBar()
         return;
     }
 
-    QTextEdit *editor = qobject_cast<QTextEdit*>(ui->tabWidget->widget(index));
+    EditorWidget *editor = qobject_cast<EditorWidget*>(ui->tabWidget->widget(index));
     if (editor) {
-        ui->statusbar->showMessage(editor->property("filePath").toString());
+        ui->statusbar->showMessage(editor->filePath());
     }
 }
+

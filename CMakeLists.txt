@@ -24,7 +24,7 @@ set(PROJECT_SOURCES
         settingsdialog.h
         mainwindow.ui
         settingsdialog.ui
-
+		editorwidget.cpp
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
