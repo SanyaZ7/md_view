@@ -3,15 +3,20 @@
 
 #include <QWidget>
 #include <QPlainTextEdit>
+
 #include "settings.h"
 
+class QContextMenuEvent;
 class QPaintEvent;
 class QResizeEvent;
-class LineNumberArea;
+class QStackedWidget;
+
+class MarkdownGraphicsView;
 
 // ============================================================
-//  CodeEditor — сам редактор с областью номеров строк
+// CodeEditor
 // ============================================================
+
 class CodeEditor : public QPlainTextEdit
 {
     Q_OBJECT
@@ -19,18 +24,24 @@ class CodeEditor : public QPlainTextEdit
 public:
     explicit CodeEditor(QWidget *parent = nullptr);
 
-    // Отрисовка номеров строк (вызывается из LineNumberArea)
     void lineNumberAreaPaintEvent(QPaintEvent *event);
     int lineNumberAreaWidth() const;
 
-    // Обновить ширину области номеров
     void updateLineNumberAreaWidth(int blockCount);
-
-    // Показать / скрыть область номеров
     void setLineNumberAreaVisible(bool visible);
+
+    void setFilePath(const QString &filePath);
+    QString filePath() const;
+
+    void setRenderMode(bool enabled);
+    bool renderMode() const;
+
+signals:
+    void renderModeRequested(bool enabled);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
 
 private slots:
     void updateLineNumberAreaRect(const QRect &rect, int dy);
@@ -38,17 +49,21 @@ private slots:
     void highlightCurrentLine();
 
 private:
-    LineNumberArea *m_lineNumberArea;
+    class LineNumberArea *m_lineNumberArea = nullptr;
+
+    QString m_filePath;
+    bool m_renderMd = false;
 };
 
 // ============================================================
-//  LineNumberArea — виджет области номеров строк
+// LineNumberArea
 // ============================================================
+
 class LineNumberArea : public QWidget
 {
 public:
     explicit LineNumberArea(CodeEditor *editor)
-        : QWidget(editor)          // теперь CodeEditor уже полный тип
+        : QWidget(editor)
         , m_editor(editor)
     {
     }
@@ -62,12 +77,13 @@ protected:
     void paintEvent(QPaintEvent *event) override;
 
 private:
-    CodeEditor *m_editor;
+    CodeEditor *m_editor = nullptr;
 };
 
 // ============================================================
-//  EditorWidget — составной виджет (контейнер)
+// EditorWidget
 // ============================================================
+
 class EditorWidget : public QWidget
 {
     Q_OBJECT
@@ -75,16 +91,41 @@ class EditorWidget : public QWidget
 public:
     explicit EditorWidget(QWidget *parent = nullptr);
 
-    CodeEditor *editor() const { return m_editor; }
+    CodeEditor *editor() const
+    {
+        return m_editor;
+    }
+
+    MarkdownGraphicsView *markdownView() const
+    {
+        return m_markdownView;
+    }
 
     void setFilePath(const QString &filePath);
     QString filePath() const;
+
     void setPlainText(const QString &text);
+
     void applySettings(const Settings &settings);
 
+    bool renderMode() const
+    {
+        return m_renderMd;
+    }
+
+public slots:
+    void setRenderMode(bool enabled);
+
+private slots:
+    void updateMarkdownView();
+
 private:
-    CodeEditor *m_editor;
+    CodeEditor *m_editor = nullptr;
+    MarkdownGraphicsView *m_markdownView = nullptr;
+    QStackedWidget *m_stack = nullptr;
+
     QString m_filePath;
+    bool m_renderMd = false;
 };
 
 #endif // EDITORWIDGET_H

@@ -9,6 +9,7 @@
 #include <QTextStream>
 #include <QFileInfo>
 #include <QMessageBox>
+#include <QByteArray>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -57,33 +58,59 @@ void MainWindow::openFile()
     addTab(filePath);
 }
 
-void MainWindow::addTab(const QString &filePath)
+void MainWindow::addTab(
+    const QString &filePath
+)
 {
     QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, "Ошибка",
-            QString("Не удалось открыть файл:\n%1").arg(file.errorString()));
+
+    if (!file.open(
+            QIODevice::ReadOnly |
+            QIODevice::Text)) {
+        QMessageBox::warning(
+            this,
+            "Ошибка",
+            QString(
+                "Не удалось открыть файл:\n%1"
+            ).arg(file.errorString())
+        );
+
         return;
     }
 
-    QTextStream in(&file);
-    QString content = in.readAll();
+    const QByteArray fileData =
+        file.readAll();
+
     file.close();
 
-    // Создаём составной редактор
-    EditorWidget *editor = new EditorWidget(this);
+    /*
+     * Markdown-файл трактуется как UTF-8.
+     * Это корректно обрабатывает кириллицу,
+     * emoji и другие Unicode-символы.
+     */
+    const QString content =
+        QString::fromUtf8(fileData);
+
+    EditorWidget *editor =
+        new EditorWidget(this);
+
     editor->setPlainText(content);
     editor->setFilePath(filePath);
-
-    // Применяем текущие настройки
     editor->applySettings(m_settings);
 
     QFileInfo info(filePath);
-    int index = ui->tabWidget->addTab(editor, info.fileName());
+
+    const int index =
+        ui->tabWidget->addTab(
+            editor,
+            info.fileName()
+        );
+
     ui->tabWidget->setCurrentIndex(index);
 
     updateStatusBar();
 }
+
 
 void MainWindow::closeTab()
 {
