@@ -3,7 +3,7 @@
 
 #include <QWidget>
 #include <QPlainTextEdit>
-
+#include <QtGlobal>
 #include "settings.h"
 
 class QContextMenuEvent;
@@ -23,10 +23,10 @@ class CodeEditor : public QPlainTextEdit
 
 public:
     explicit CodeEditor(QWidget *parent = nullptr);
-
+	void scrollToLine(int line);
     void lineNumberAreaPaintEvent(QPaintEvent *event);
     int lineNumberAreaWidth() const;
-
+	int firstVisibleLine() const;
     void updateLineNumberAreaWidth(int blockCount);
     void setLineNumberAreaVisible(bool visible);
 
@@ -50,7 +50,7 @@ private slots:
 
 private:
     class LineNumberArea *m_lineNumberArea = nullptr;
-
+	
     QString m_filePath;
     bool m_renderMd = false;
 };
@@ -123,7 +123,7 @@ private:
     CodeEditor *m_editor = nullptr;
     MarkdownGraphicsView *m_markdownView = nullptr;
     QStackedWidget *m_stack = nullptr;
-
+	quint64 m_scrollRequestId = 0;
     QString m_filePath;
     bool m_renderMd = false;
 };

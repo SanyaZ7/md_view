@@ -9,8 +9,11 @@
 #include <QMenu>
 #include <QPainter>
 #include <QStackedWidget>
-#include <QTextBlock>
 #include <QVBoxLayout>
+#include <QScrollBar>
+#include <QTimer>
+#include <QTextBlock>
+#include <QTextCursor>
 
 // ============================================================
 // LineNumberArea
@@ -194,11 +197,6 @@ QString CodeEditor::filePath() const
     return m_filePath;
 }
 
-void CodeEditor::setRenderMode(bool enabled)
-{
-    m_renderMd = enabled;
-}
-
 bool CodeEditor::renderMode() const
 {
     return m_renderMd;
@@ -297,24 +295,85 @@ void EditorWidget::applySettings(const Settings &settings)
         settings.lineNumbers);
 }
 
+void CodeEditor::setRenderMode(bool enabled)
+{
+    m_renderMd = enabled;
+}
+
 void EditorWidget::setRenderMode(bool enabled)
 {
     if (m_renderMd == enabled) {
         return;
     }
 
-    m_renderMd = enabled;
-
-    m_editor->setRenderMode(enabled);
-    m_markdownView->setRenderMode(enabled);
+    /*
+     * Increase request id to cancel any pending scroll‑restore
+     * from a previous (now obsolete) mode switch.
+     */
+    const quint64 request_id = ++m_scrollRequestId;
 
     if (enabled) {
-        updateMarkdownView();
+        // ---------- Switch to RENDERED view ----------
+        QScrollBar* editorScroll = m_editor->verticalScrollBar();
+        const int  editorMax   = editorScroll->maximum();
+        const int  editorVal   = editorScroll->value();
+        const qreal ratio      = (editorMax > 0)
+                                     ? static_cast<qreal>(editorVal) / editorMax
+                                     : 0.0;
+
+        m_renderMd = enabled;
+        m_editor->setRenderMode(enabled);
+        m_markdownView->setRenderMode(enabled);
+
         m_stack->setCurrentWidget(m_markdownView);
+        updateMarkdownView();               // rebuilds HTML, sets scene rect
+
+        QTimer::singleShot(0, this, [this, ratio, request_id]() {
+            if (request_id != m_scrollRequestId ||
+                !m_renderMd ||
+                m_stack->currentWidget() != m_markdownView) {
+                return;
+            }
+
+            QScrollBar* viewScroll = m_markdownView->verticalScrollBar();
+            const int   viewMax    = viewScroll->maximum();
+            const int   target     = qBound(viewScroll->minimum(),
+                                            qRound(ratio * viewMax),
+                                            viewScroll->maximum());
+            viewScroll->setValue(target);
+        });
     } else {
+        // ---------- Switch to RAW TEXT editor ----------
+        QScrollBar* viewScroll = m_markdownView->verticalScrollBar();
+        const int   viewMax    = viewScroll->maximum();
+        const int   viewVal    = viewScroll->value();
+        const qreal ratio      = (viewMax > 0)
+                                     ? static_cast<qreal>(viewVal) / viewMax
+                                     : 0.0;
+
+        m_renderMd = enabled;
+        m_editor->setRenderMode(enabled);
+        m_markdownView->setRenderMode(enabled);
+
         m_stack->setCurrentWidget(m_editor);
+
+        QTimer::singleShot(0, this, [this, ratio, request_id]() {
+            if (request_id != m_scrollRequestId ||
+                m_renderMd ||
+                m_stack->currentWidget() != m_editor) {
+                return;
+            }
+
+            QScrollBar* editorScroll = m_editor->verticalScrollBar();
+            const int   editorMax    = editorScroll->maximum();
+            const int   target       = qBound(editorScroll->minimum(),
+                                              qRound(ratio * editorMax),
+                                              editorScroll->maximum());
+            editorScroll->setValue(target);
+        });
     }
 }
+
 
 void EditorWidget::updateMarkdownView()
 {
@@ -322,17 +381,74 @@ void EditorWidget::updateMarkdownView()
         return;
     }
 
+    const QString source_text =
+        m_editor->toPlainText();
+
+    m_markdownView->setSourceText(source_text);
+
     const QByteArray utf8Text =
-        m_editor->toPlainText().toUtf8();
+        source_text.toUtf8();
 
     const std::string markdown(
         utf8Text.constData(),
         static_cast<std::size_t>(utf8Text.size()));
 
     MarkdownParser parser;
+
     const std::vector<MarkdownNode> document =
         parser.parse(markdown);
 
     m_markdownView->setDocument(document);
 }
+
+int CodeEditor::firstVisibleLine() const
+{
+    const QTextBlock block =
+        firstVisibleBlock();
+
+    if (!block.isValid()) {
+        return 0;
+    }
+
+    return block.blockNumber();
+}
+
+void CodeEditor::scrollToLine(int line)
+{
+    if (line < 0) {
+        line = 0;
+    }
+
+    const QTextBlock block =
+        document()->findBlockByNumber(line);
+
+    if (!block.isValid()) {
+        return;
+    }
+
+    const QRectF block_rect =
+        blockBoundingGeometry(block)
+            .translated(contentOffset());
+
+    QScrollBar* scroll_bar =
+        verticalScrollBar();
+
+    if (!scroll_bar) {
+        return;
+    }
+
+    const int target_value =
+        scroll_bar->value() +
+        qRound(block_rect.top());
+
+    scroll_bar->setValue(
+        qBound(
+            scroll_bar->minimum(),
+            target_value,
+            scroll_bar->maximum()
+        )
+    );
+}
+
+
 
