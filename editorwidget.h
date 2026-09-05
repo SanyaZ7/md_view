@@ -23,18 +23,12 @@ class CodeEditor : public QPlainTextEdit
 
 public:
     explicit CodeEditor(QWidget *parent = nullptr);
-	void scrollToLine(int line);
     void lineNumberAreaPaintEvent(QPaintEvent *event);
     int lineNumberAreaWidth() const;
-	int firstVisibleLine() const;
     void updateLineNumberAreaWidth(int blockCount);
     void setLineNumberAreaVisible(bool visible);
-
     void setFilePath(const QString &filePath);
-    QString filePath() const;
-
     void setRenderMode(bool enabled);
-    bool renderMode() const;
 
 signals:
     void renderModeRequested(bool enabled);

@@ -192,16 +192,6 @@ void CodeEditor::setFilePath(const QString &filePath)
     m_filePath = filePath;
 }
 
-QString CodeEditor::filePath() const
-{
-    return m_filePath;
-}
-
-bool CodeEditor::renderMode() const
-{
-    return m_renderMd;
-}
-
 void CodeEditor::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu *menu = createStandardContextMenu();
@@ -374,7 +364,6 @@ void EditorWidget::setRenderMode(bool enabled)
     }
 }
 
-
 void EditorWidget::updateMarkdownView()
 {
     if (!m_renderMd) {
@@ -400,55 +389,5 @@ void EditorWidget::updateMarkdownView()
 
     m_markdownView->setDocument(document);
 }
-
-int CodeEditor::firstVisibleLine() const
-{
-    const QTextBlock block =
-        firstVisibleBlock();
-
-    if (!block.isValid()) {
-        return 0;
-    }
-
-    return block.blockNumber();
-}
-
-void CodeEditor::scrollToLine(int line)
-{
-    if (line < 0) {
-        line = 0;
-    }
-
-    const QTextBlock block =
-        document()->findBlockByNumber(line);
-
-    if (!block.isValid()) {
-        return;
-    }
-
-    const QRectF block_rect =
-        blockBoundingGeometry(block)
-            .translated(contentOffset());
-
-    QScrollBar* scroll_bar =
-        verticalScrollBar();
-
-    if (!scroll_bar) {
-        return;
-    }
-
-    const int target_value =
-        scroll_bar->value() +
-        qRound(block_rect.top());
-
-    scroll_bar->setValue(
-        qBound(
-            scroll_bar->minimum(),
-            target_value,
-            scroll_bar->maximum()
-        )
-    );
-}
-
 
 
