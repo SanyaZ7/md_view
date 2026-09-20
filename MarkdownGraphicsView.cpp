@@ -13,6 +13,14 @@
 #include <QTextCursor>
 #include <QAbstractTextDocumentLayout>
 #include <QRegularExpression>
+#include <QClipboard>
+#include <QApplication>
+#include <QDesktopServices>
+#include <QTimer>
+#include <QUrl>
+#include <QPushButton>
+#include <QGraphicsProxyWidget>
+#include <QFontMetrics>
 
 // --- Реализация MarkdownUtils ---
 
@@ -114,7 +122,7 @@ QString table_to_html(const MarkdownNode& node) {
     return result;
 }
 
-QString node_to_html(const MarkdownNode& node) {
+QString node_to_html(const MarkdownNode& node, std::vector<QString>* code_list) {
     switch (node.type) {
         case NodeType::Heading: {
             const int level = qBound(1, node.level, 6);
@@ -124,11 +132,21 @@ QString node_to_html(const MarkdownNode& node) {
             return QStringLiteral("<p>") + children_to_html(node) + QStringLiteral("</p>");
         case NodeType::Quote:
             return QStringLiteral("<blockquote style=\"border-left:4px solid #aaaaaa;margin:0 0 12px 0;padding-left:12px;color:#555555;\">")
-                   + blocks_to_html(node.children) + QStringLiteral("</blockquote>");
+                   + blocks_to_html(node.children, code_list) + QStringLiteral("</blockquote>");
         case NodeType::CodeBlock: {
+            const int index = code_list ? static_cast<int>(code_list->size()) : -1;
+            if (code_list) {
+                code_list->push_back(utf8(node.content));
+            }
+            // Первая строка содержит невидимый маркер (U+2063), по числу
+            // символов которого после установки HTML находится позиция
+            // блока для размещения виджета-кнопки "Копировать".
+            const QString marker = index >= 0
+                ? QString(static_cast<int>(index) + 1, QChar(0x2063))
+                : QString(QChar(0x2063));
             const QString content = node.content.empty() ? QStringLiteral("<br/>") : escape_html(node.content);
-            return QStringLiteral("<pre style=\"background:#f3f3f3;border:1px solid #dddddd;padding:10px;font-family:'Noto Sans Mono';white-space:pre-wrap;margin:0 0 12px 0;\">")
-                   + content + QStringLiteral("</pre>");
+            return QStringLiteral("<pre style=\"background:#f3f3f3;border:1px solid #dddddd;padding:6px 10px;font-family:'Noto Sans Mono';white-space:pre-wrap;margin:0 0 12px 0;\">")
+                   + marker + QStringLiteral("\n") + content + QStringLiteral("</pre>");
         }
         case NodeType::HorizontalRule:
             return QStringLiteral("<hr style=\"border:0;border-top:1px solid #aaaaaa;margin:12px 0;\">");
@@ -141,10 +159,10 @@ QString node_to_html(const MarkdownNode& node) {
     }
 }
 
-QString blocks_to_html(const std::vector<MarkdownNode>& nodes) {
+QString blocks_to_html(const std::vector<MarkdownNode>& nodes, std::vector<QString>* code_list) {
     QString result;
     for (const MarkdownNode& child : nodes) {
-        result += node_to_html(child);
+        result += node_to_html(child, code_list);
     }
     return result;
 }
@@ -322,7 +340,12 @@ void MarkdownGraphicsView::render_document() {
     auto* item = new QGraphicsTextItem();
     text_item_ = item;
     item->setFont(text_font_);
-    item->setOpenExternalLinks(true);
+    item->setOpenExternalLinks(false);
+    connect(item, &QGraphicsTextItem::linkActivated, this, [](const QString& link) {
+        QDesktopServices::openUrl(QUrl(link));
+    });
+
+    std::vector<QString> code_list;
 
     QString html = QStringLiteral("<html><head><style>"
         "html, body { margin:0; padding:0; font-family:'Noto Sans','Noto Color Emoji','Segoe UI Emoji','Apple Color Emoji',sans-serif; font-size:12pt; }"
@@ -331,7 +354,7 @@ void MarkdownGraphicsView::render_document() {
         "table { margin:0 0 12px 0; } blockquote { margin:0 0 12px 0; } pre { margin:0 0 12px 0; } "
         "ul, ol { margin-top:0; margin-bottom:12px; } hr { margin:12px 0; }"
         "</style></head><body>")
-        + MarkdownUtils::blocks_to_html(document_)
+        + MarkdownUtils::blocks_to_html(document_, &code_list)
         + QStringLiteral("</body></html>");
 
     item->setHtml(html);
@@ -341,6 +364,80 @@ void MarkdownGraphicsView::render_document() {
     const qreal document_height = item->document()->size().height();
     document_scene->addItem(item);
     document_scene->setSceneRect(0.0, 0.0, viewport_width, qMax(32.0 + document_height, static_cast<qreal>(viewport()->height())));
+
+    createCopyButtons(code_list);
+}
+
+void MarkdownGraphicsView::createCopyButtons(const std::vector<QString>& codes) {
+    copy_buttons_.clear();
+
+    if (!text_item_ || !scene()) {
+        return;
+    }
+
+    QTextDocument* document = text_item_->document();
+    if (!document) {
+        return;
+    }
+
+    for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
+        const QString text = block.text();
+        if (text.isEmpty() || text.at(0) != QChar(0x2063)) {
+            continue;
+        }
+
+        // Количество маркеров U+2063 равно index + 1.
+        int index = 0;
+        while (index < text.size() && text.at(index) == QChar(0x2063)) {
+            ++index;
+        }
+        --index;
+
+        if (index < 0 || index >= static_cast<int>(codes.size())) {
+            continue;
+        }
+
+        const QRectF block_rect =
+            document->documentLayout()->blockBoundingRect(block);
+        const qreal y = block_rect.top();
+        const qreal x = block_rect.left();
+
+        auto* button = new QPushButton(tr("Копировать"));
+        button->setCursor(Qt::PointingHandCursor);
+        button->setFocusPolicy(Qt::NoFocus);
+
+        QFont button_font(QStringLiteral("Noto Sans"));
+        button_font.setPointSizeF(9.0);
+        button->setFont(button_font);
+
+        // Ширина рассчитана по более длинной надписи ("Скопировано"),
+        // чтобы текст не обрезался при смене состояния.
+        const QFontMetrics metrics(button_font);
+        const int button_width =
+            qMax(metrics.horizontalAdvance(tr("Копировать")),
+                 metrics.horizontalAdvance(tr("Скопировано"))) + 20;
+        button->setMinimumWidth(button_width);
+
+        button->setStyleSheet(QStringLiteral(
+            "QPushButton { background:#e6e6e6; border:1px solid #c4c4c4; border-radius:3px;"
+            " padding:2px 8px; color:#333333; }"
+            "QPushButton:hover { background:#dcdcdc; }"
+            "QPushButton:pressed { background:#cfcfcf; }"));
+
+        const QString code = codes[index];
+        connect(button, &QPushButton::clicked, this, [code, button]() {
+            QApplication::clipboard()->setText(code);
+            button->setText(tr("Скопировано"));
+            QTimer::singleShot(1500, button, [button]() {
+                button->setText(tr("Копировать"));
+            });
+        });
+
+        QGraphicsProxyWidget* proxy = scene()->addWidget(button);
+        proxy->setPos(16.0 + x + 2.0, 16.0 + y + 4.0);
+
+        copy_buttons_.push_back({button, proxy, code});
+    }
 }
 
 void MarkdownGraphicsView::resizeEvent(QResizeEvent* event) {
