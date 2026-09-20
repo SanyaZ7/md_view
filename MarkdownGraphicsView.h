@@ -4,8 +4,8 @@
 #include "MarkdownNode.h"
 #include <QString>
 #include <QGraphicsView>
+#include <QPlainTextEdit>
 #include <QFont>
-#include <QString>
 #include <string>
 #include <vector>
 
@@ -35,7 +35,10 @@ class QResizeEvent;
 class QGraphicsTextItem;
 class QPushButton;
 class QGraphicsProxyWidget;
-
+class QMouseEvent;
+class CodeBlockEditor;
+class QFocusEvent;
+class QWheelEvent;
 class MarkdownGraphicsView : public QGraphicsView
 {
     Q_OBJECT
@@ -47,8 +50,14 @@ public:
     int sourceLineForCurrentScroll() const;
     void setDocument(const std::vector<MarkdownNode>& document);
 
+    // Делает активным (перехватывающим колесо мыши) только один блок кода.
+    void activateCodeBlock(CodeBlockEditor* active);
+
     void setRenderMode(bool enabled);
     bool renderMode() const;
+
+    void setCodeBlockMaxLines(int lines);
+    int codeBlockMaxLines() const;
 
 signals:
     void renderModeRequested(bool enabled);
@@ -56,10 +65,12 @@ signals:
 protected:
     void contextMenuEvent(QContextMenuEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
 
 private:
     QFont text_font_;
     QFont code_font_;
+    qreal code_line_height_ = 0.0;
     bool render_mode_ = false;
 
     std::vector<MarkdownNode> document_;
@@ -76,6 +87,10 @@ private:
     mutable std::vector<SourceAnchor> source_anchors_;
     void rebuildSourceAnchors() const;
     void createCopyButtons(const std::vector<QString>& codes);
+    void createScrollableCodeBlocks(const std::vector<QString>& codes);
+    void applyCodeBlockHeights(const std::vector<QString>& codes);
+
+    int code_block_max_lines_ = 0;  // 0 = без ограничения
 
     struct CopyButton {
         QPushButton* button = nullptr;
@@ -83,6 +98,41 @@ private:
         QString code;
     };
     std::vector<CopyButton> copy_buttons_;
+
+    std::vector<CodeBlockEditor*> code_blocks_;
+    CodeBlockEditor* active_code_block_ = nullptr;
+};
+
+// ============================================================
+// CodeBlockEditor
+// ============================================================
+
+/*
+ * Прокручиваемый блок кода.
+ *
+ * Колесо мыши прокручивает содержимое только тогда, когда блок
+ * явно активирован щелчком (см. MarkdownGraphicsView::mousePressEvent).
+ * В противном случае событие уходит дальше и прокручивается
+ * весь документ.
+ */
+class CodeBlockEditor : public QPlainTextEdit
+{
+    Q_OBJECT
+
+public:
+    explicit CodeBlockEditor(MarkdownGraphicsView* view, QWidget* parent = nullptr);
+
+    bool isActive() const { return active_; }
+    void setActive(bool active);
+
+protected:
+    void mousePressEvent(QMouseEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
+    void focusOutEvent(QFocusEvent* event) override;
+
+private:
+    MarkdownGraphicsView* view_ = nullptr;
+    bool active_ = false;
 };
 
 #endif // MARKDOWN_GRAPHICS_VIEW_H

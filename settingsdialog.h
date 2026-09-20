@@ -21,6 +21,7 @@ public:
 private:
     void loadFromSettings(const Settings &s);
     void saveToSettings(Settings &s) const;
+    void updateCodeBlockLinesVisibility();
 
     Ui::SettingsDialog *ui;
 };

@@ -21,6 +21,46 @@
 #include <QPushButton>
 #include <QGraphicsProxyWidget>
 #include <QFontMetrics>
+#include <QPlainTextEdit>
+#include <QMouseEvent>
+#include <QFocusEvent>
+#include <QWheelEvent>
+#include <QTextBlockFormat>
+#include <cmath>
+#include <algorithm>
+
+// Геометрия прокручиваемых блоков кода (в px).
+static const int kCodeBlockPadding   = 6;
+static const int kCodeBlockBorder    = 1;
+static const int kCodeBlockVSpacing  = 2;
+
+// Текущее ограничение высоты блоков кода (0 = без ограничения)
+// и высота строки кода; устанавливаются перед вызовом blocks_to_html().
+static int   g_code_block_max_lines  = 0;
+static qreal g_code_line_height      = 0.0;
+
+// Высота виджета кода, вмещающего заданное число строк.
+//
+// QTextDocument игнорирует CSS-свойство height у блочных элементов,
+// поэтому место под блок резервируется через QTextBlockFormat::FixedHeight
+// (см. applyCodeBlockHeights()). Высота виджета и высота блока
+// рассчитываются по одной и той же формуле, чтобы виджет не наезжал
+// на следующий за блоком текст.
+//
+// По замерам QPlainTextEdit реальная высота строки равна lineSpacing + 1,
+// а рамка, внутренние отступы и margin документа суммарно дают 15 px.
+static const int kCodeBlockChrome = 15;
+
+// Высота отдельной области для кнопки «Копировать».
+// Она резервируется внутри каждого блока кода, чтобы кнопка
+// не перекрывала первую строку кода.
+static const int kCodeBlockButtonArea = 28;
+
+static int codeBlockWidgetHeight(int lines, qreal line_height)
+{
+    const qreal line = line_height + 1.0;
+    return static_cast<int>(std::ceil(lines * line)) + kCodeBlockChrome;
+}
 
 // --- Реализация MarkdownUtils ---
 
@@ -122,38 +162,118 @@ QString table_to_html(const MarkdownNode& node) {
     return result;
 }
 
-QString node_to_html(const MarkdownNode& node, std::vector<QString>* code_list) {
+QString node_to_html(
+    const MarkdownNode& node,
+    std::vector<QString>* code_list)
+{
     switch (node.type) {
         case NodeType::Heading: {
             const int level = qBound(1, node.level, 6);
-            return QStringLiteral("<h%1>%2</h%1>").arg(level).arg(children_to_html(node));
+
+            return QStringLiteral("<h%1>%2</h%1>")
+                .arg(level)
+                .arg(children_to_html(node));
         }
+
         case NodeType::Text:
-            return QStringLiteral("<p>") + children_to_html(node) + QStringLiteral("</p>");
+            return QStringLiteral("<p>")
+                + children_to_html(node)
+                + QStringLiteral("</p>");
+
         case NodeType::Quote:
-            return QStringLiteral("<blockquote style=\"border-left:4px solid #aaaaaa;margin:0 0 12px 0;padding-left:12px;color:#555555;\">")
-                   + blocks_to_html(node.children, code_list) + QStringLiteral("</blockquote>");
+            return QStringLiteral(
+                       "<blockquote style=\"border-left:4px solid #aaaaaa;"
+                       "margin:0 0 12px 0;padding-left:12px;color:#555555;\">")
+                + blocks_to_html(node.children, code_list)
+                + QStringLiteral("</blockquote>");
+
         case NodeType::CodeBlock: {
-            const int index = code_list ? static_cast<int>(code_list->size()) : -1;
+            const QString code = utf8(node.content);
+
+            const int index =
+                code_list
+                    ? static_cast<int>(code_list->size())
+                    : -1;
+
             if (code_list) {
-                code_list->push_back(utf8(node.content));
+                code_list->push_back(code);
             }
-            // Первая строка содержит невидимый маркер (U+2063), по числу
-            // символов которого после установки HTML находится позиция
-            // блока для размещения виджета-кнопки "Копировать".
-            const QString marker = index >= 0
-                ? QString(static_cast<int>(index) + 1, QChar(0x2063))
-                : QString(QChar(0x2063));
-            const QString content = node.content.empty() ? QStringLiteral("<br/>") : escape_html(node.content);
-            return QStringLiteral("<pre style=\"background:#f3f3f3;border:1px solid #dddddd;padding:6px 10px;font-family:'Noto Sans Mono';white-space:pre-wrap;margin:0 0 12px 0;\">")
-                   + marker + QStringLiteral("\n") + content + QStringLiteral("</pre>");
+
+            /*
+             * Маркер используется для поиска QTextBlock, к которому
+             * будет привязан QPlainTextEdit и кнопка копирования.
+             *
+             * Число символов U+2063 равно index + 1.
+             */
+            const QString marker =
+                index >= 0
+                    ? QString(
+                          static_cast<int>(index) + 1,
+                          QChar(0x2063)
+                      )
+                    : QString(QChar(0x2063));
+
+            const int line_count =
+                1 + static_cast<int>(
+                    std::count(
+                        node.content.begin(),
+                        node.content.end(),
+                        '\n'
+                    )
+                );
+
+            /*
+             * Для длинного блока оставляем только один QTextBlock
+             * с маркером. Его высота позднее фиксируется в
+             * applyCodeBlockHeights().
+             *
+             * Раньше после маркера добавлялся отдельный div-placeholder.
+             * В результате высота строки маркера дополнительно
+             * попадала в layout и образовывала пустой зазор.
+             */
+            if (index >= 0 &&
+                g_code_block_max_lines > 0 &&
+                line_count > g_code_block_max_lines) {
+                return QStringLiteral(
+                           "<div style=\"background:#f3f3f3;"
+                           "border:1px solid #dddddd;"
+                           "padding:0;"
+                           "margin:0 0 12px 0;"
+                           "font-family:'Noto Sans Mono';\">")
+                    + marker
+                    + QStringLiteral("</div>");
+            }
+
+            const QString content =
+                node.content.empty()
+                    ? QStringLiteral("<br/>")
+                    : escape_html(node.content);
+
+            return QStringLiteral(
+                       "<pre style=\"background:#f3f3f3;"
+                       "border:1px solid #dddddd;"
+                       "padding:6px 10px;"
+                       "font-family:'Noto Sans Mono';"
+                       "white-space:pre-wrap;"
+                       "margin:0 0 12px 0;\">")
+                + marker
+                + QStringLiteral("\n")
+                + content
+                + QStringLiteral("</pre>");
         }
+
         case NodeType::HorizontalRule:
-            return QStringLiteral("<hr style=\"border:0;border-top:1px solid #aaaaaa;margin:12px 0;\">");
+            return QStringLiteral(
+                "<hr style=\"border:0;border-top:1px solid #aaaaaa;"
+                "margin:12px 0;\">"
+            );
+
         case NodeType::List:
             return list_to_html(node);
+
         case NodeType::Table:
             return table_to_html(node);
+
         default:
             return children_to_html(node);
     }
@@ -294,6 +414,9 @@ MarkdownGraphicsView::MarkdownGraphicsView(QWidget* parent)
     , code_font_(QStringLiteral("Noto Sans Mono"), 11)
     , render_mode_(false)
 {
+    // Высота строки моноширинного шрифта для расчёта высоты плейсхолдера.
+    code_line_height_ = QFontMetrics(code_font_).lineSpacing();
+
     setScene(new QGraphicsScene(this));
     setRenderHint(QPainter::Antialiasing, false);
     setRenderHint(QPainter::TextAntialiasing, true);
@@ -318,6 +441,14 @@ void MarkdownGraphicsView::setRenderMode(bool enabled) {
     render_mode_ = enabled;
 }
 
+void MarkdownGraphicsView::setCodeBlockMaxLines(int lines) {
+    code_block_max_lines_ = qMax(0, lines);
+}
+
+int MarkdownGraphicsView::codeBlockMaxLines() const {
+    return code_block_max_lines_;
+}
+
 bool MarkdownGraphicsView::renderMode() const {
     return render_mode_;
 }
@@ -326,49 +457,218 @@ void MarkdownGraphicsView::clear_document() {
     if (scene()) scene()->clear();
 }
 
-void MarkdownGraphicsView::render_document() {
+void MarkdownGraphicsView::render_document()
+{
     QGraphicsScene* document_scene = scene();
-    if (!document_scene) return;
 
+    if (!document_scene) {
+        return;
+    }
+
+    code_blocks_.clear();
+    active_code_block_ = nullptr;
     document_scene->clear();
     text_item_ = nullptr;
     source_anchors_.clear();
 
-    const int viewport_width = qMax(300, viewport()->width());
-    const qreal document_width = qMax(100.0, viewport_width - 32.0);
+    const int viewport_width =
+        qMax(300, viewport()->width());
+
+    const qreal document_width =
+        qMax(
+            100.0,
+            static_cast<qreal>(viewport_width) - 32.0
+        );
 
     auto* item = new QGraphicsTextItem();
+
     text_item_ = item;
+
     item->setFont(text_font_);
     item->setOpenExternalLinks(false);
-    connect(item, &QGraphicsTextItem::linkActivated, this, [](const QString& link) {
-        QDesktopServices::openUrl(QUrl(link));
-    });
+
+    connect(
+        item,
+        &QGraphicsTextItem::linkActivated,
+        this,
+        [](const QString& link) {
+            QDesktopServices::openUrl(QUrl(link));
+        }
+    );
 
     std::vector<QString> code_list;
 
-    QString html = QStringLiteral("<html><head><style>"
-        "html, body { margin:0; padding:0; font-family:'Noto Sans','Noto Color Emoji','Segoe UI Emoji','Apple Color Emoji',sans-serif; font-size:12pt; }"
-        "p { margin:0 0 12px 0; } h1, h2, h3, h4, h5, h6 { margin:12px 0 8px 0; } "
-        "h1:first-child, h2:first-child, h3:first-child, h4:first-child, h5:first-child, h6:first-child { margin-top:0; }"
-        "table { margin:0 0 12px 0; } blockquote { margin:0 0 12px 0; } pre { margin:0 0 12px 0; } "
-        "ul, ol { margin-top:0; margin-bottom:12px; } hr { margin:12px 0; }"
-        "</style></head><body>")
+    g_code_block_max_lines = code_block_max_lines_;
+    g_code_line_height = code_line_height_;
+
+    /*
+     * Для обычного <pre> место под кнопку создаётся CSS-отступом.
+     * FixedHeight применяется только к marker-блокам длинного кода.
+     */
+    const QString html =
+        QStringLiteral(
+            "<html><head><style>"
+            "html, body {"
+            " margin:0;"
+            " padding:0;"
+            " font-family:'Noto Sans','Noto Color Emoji','Segoe UI Emoji','Apple Color Emoji',sans-serif;"
+            " font-size:12pt;"
+            "}"
+            "p { margin:0 0 12px 0; }"
+            "h1, h2, h3, h4, h5, h6 { margin:12px 0 8px 0; }"
+            "h1:first-child, h2:first-child, h3:first-child, h4:first-child, h5:first-child, h6:first-child { margin-top:0; }"
+            "table { margin:0 0 12px 0; }"
+            "blockquote { margin:0 0 12px 0; }"
+            "pre {"
+            " margin:0 0 12px 0;"
+            " padding-top:%1px !important;"
+            "}"
+            "ul, ol { margin-top:0; margin-bottom:12px; }"
+            "hr { margin:12px 0; }"
+            "</style></head><body>"
+        )
+        .arg(kCodeBlockButtonArea + kCodeBlockPadding)
         + MarkdownUtils::blocks_to_html(document_, &code_list)
         + QStringLiteral("</body></html>");
 
     item->setHtml(html);
     item->setTextWidth(document_width);
-    item->setPos(16.0, 16.0);
 
-    const qreal document_height = item->document()->size().height();
+    /*
+     * FixedHeight используется только у placeholder-блоков
+     * длинного кода, заменяемых QPlainTextEdit.
+     */
+    applyCodeBlockHeights(code_list);
+	if (code_block_max_lines_ > 0) {
+    item->setTextWidth(-1.0);
+    item->setTextWidth(document_width);
+	}
+    /*
+     * Принудительно завершаем layout QTextDocument до получения
+     * координат QTextBlock и создания QGraphicsProxyWidget.
+     */
+    QTextDocument* document = item->document();
+
+    if (document && document->documentLayout()) {
+        document->documentLayout()->documentSize();
+    }
+
+    item->setPos(16.0, 16.0);
     document_scene->addItem(item);
-    document_scene->setSceneRect(0.0, 0.0, viewport_width, qMax(32.0 + document_height, static_cast<qreal>(viewport()->height())));
 
     createCopyButtons(code_list);
+    createScrollableCodeBlocks(code_list);
+
+    const auto update_scene_rect =
+        [this, item, viewport_width]() {
+            if (!scene() || text_item_ != item) {
+                return;
+            }
+
+            QTextDocument* current_document = item->document();
+
+            if (!current_document ||
+                !current_document->documentLayout()) {
+                return;
+            }
+
+            const QSizeF document_size =
+                current_document->documentLayout()->documentSize();
+
+            qreal content_bottom = 0.0;
+
+            /*
+             * В обычном режиме сохраняем старый путь расчёта:
+             * в нём QGraphicsTextItem является единственным
+             * источником геометрии текста и дефектов нет.
+             */
+            if (code_block_max_lines_ <= 0) {
+                const QRectF text_rect =
+                    item->sceneBoundingRect();
+
+                const QRectF items_rect =
+                    scene()->itemsBoundingRect();
+
+                content_bottom =
+                    qMax(
+                        text_rect.bottom(),
+                        items_rect.bottom()
+                    );
+            } else {
+                /*
+                 * При FixedHeight геометрия QGraphicsTextItem может
+                 * отставать от реального QTextDocument. Используем
+                 * фактическую высоту layout, а proxy-виджеты учитываем
+                 * отдельно. Сам text_item_ намеренно исключён из
+                 * itemsBoundingRect(), чтобы его устаревшая граница
+                 * не добавляла пустую область внизу.
+                 */
+                content_bottom =
+                    item->mapToScene(
+                        QPointF(0.0, document_size.height())
+                    ).y();
+
+                const QList<QGraphicsItem*> scene_items =
+                    scene()->items();
+
+                for (QGraphicsItem* scene_item : scene_items) {
+                    if (!scene_item || scene_item == item) {
+                        continue;
+                    }
+
+                    content_bottom =
+                        qMax(
+                            content_bottom,
+                            scene_item->sceneBoundingRect().bottom()
+                        );
+                }
+            }
+
+            const qreal scene_height =
+                qMax(
+                    static_cast<qreal>(viewport()->height()),
+                    content_bottom + 16.0
+                );
+
+            scene()->setSceneRect(
+                0.0,
+                0.0,
+                viewport_width,
+                qMax(32.0, scene_height)
+            );
+        };
+
+    update_scene_rect();
+
+    /*
+     * QTextDocument может закончить пересчёт геометрии уже после
+     * выхода из render_document().
+     */
+    connect(
+        document->documentLayout(),
+        &QAbstractTextDocumentLayout::documentSizeChanged,
+        this,
+        [update_scene_rect](const QSizeF&) {
+            update_scene_rect();
+        }
+    );
+
+    /*
+     * Proxy-виджеты могут уточнить геометрию только после добавления
+     * в QGraphicsScene. Повторяем расчёт в следующем event loop.
+     */
+    QTimer::singleShot(
+        0,
+        this,
+        [update_scene_rect]() {
+            update_scene_rect();
+        }
+    );
 }
 
-void MarkdownGraphicsView::createCopyButtons(const std::vector<QString>& codes) {
+void MarkdownGraphicsView::createCopyButtons(
+    const std::vector<QString>& codes)
+{
     copy_buttons_.clear();
 
     if (!text_item_ || !scene()) {
@@ -380,17 +680,23 @@ void MarkdownGraphicsView::createCopyButtons(const std::vector<QString>& codes) 
         return;
     }
 
-    for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
+    for (QTextBlock block = document->begin();
+         block.isValid();
+         block = block.next()) {
         const QString text = block.text();
+
         if (text.isEmpty() || text.at(0) != QChar(0x2063)) {
             continue;
         }
 
         // Количество маркеров U+2063 равно index + 1.
         int index = 0;
-        while (index < text.size() && text.at(index) == QChar(0x2063)) {
+
+        while (index < text.size() &&
+               text.at(index) == QChar(0x2063)) {
             ++index;
         }
+
         --index;
 
         if (index < 0 || index >= static_cast<int>(codes.size())) {
@@ -399,6 +705,7 @@ void MarkdownGraphicsView::createCopyButtons(const std::vector<QString>& codes) 
 
         const QRectF block_rect =
             document->documentLayout()->blockBoundingRect(block);
+
         const qreal y = block_rect.top();
         const qreal x = block_rect.left();
 
@@ -413,36 +720,189 @@ void MarkdownGraphicsView::createCopyButtons(const std::vector<QString>& codes) 
         // Ширина рассчитана по более длинной надписи ("Скопировано"),
         // чтобы текст не обрезался при смене состояния.
         const QFontMetrics metrics(button_font);
+
         const int button_width =
-            qMax(metrics.horizontalAdvance(tr("Копировать")),
-                 metrics.horizontalAdvance(tr("Скопировано"))) + 20;
+            qMax(
+                metrics.horizontalAdvance(tr("Копировать")),
+                metrics.horizontalAdvance(tr("Скопировано"))
+            ) + 20;
+
         button->setMinimumWidth(button_width);
 
         button->setStyleSheet(QStringLiteral(
-            "QPushButton { background:#e6e6e6; border:1px solid #c4c4c4; border-radius:3px;"
-            " padding:2px 8px; color:#333333; }"
-            "QPushButton:hover { background:#dcdcdc; }"
-            "QPushButton:pressed { background:#cfcfcf; }"));
+            "QPushButton {"
+            " background:#e6e6e6;"
+            " border:1px solid #c4c4c4;"
+            " border-radius:3px;"
+            " padding:2px 8px;"
+            " color:#333333;"
+            "}"
+            "QPushButton:hover {"
+            " background:#dcdcdc;"
+            "}"
+            "QPushButton:pressed {"
+            " background:#cfcfcf;"
+            "}"
+        ));
 
         const QString code = codes[index];
-        connect(button, &QPushButton::clicked, this, [code, button]() {
-            QApplication::clipboard()->setText(code);
-            button->setText(tr("Скопировано"));
-            QTimer::singleShot(1500, button, [button]() {
-                button->setText(tr("Копировать"));
-            });
-        });
+
+        connect(button,
+                &QPushButton::clicked,
+                this,
+                [code, button]() {
+                    QApplication::clipboard()->setText(code);
+
+                    button->setText(tr("Скопировано"));
+
+                    QTimer::singleShot(
+                        1500,
+                        button,
+                        [button]() {
+                            button->setText(tr("Копировать"));
+                        }
+                    );
+                });
 
         QGraphicsProxyWidget* proxy = scene()->addWidget(button);
-        proxy->setPos(16.0 + x + 2.0, 16.0 + y + 4.0);
+
+        proxy->setPos(
+            16.0 + x + 2.0,
+            16.0 + y + 4.0
+        );
+
+        /*
+         * Длинный CodeBlockEditor размещается на z = 1.
+         * Кнопка должна быть выше него, иначе редактор кода
+         * перекрывает кнопку в нижних/длинных code-block.
+         */
+        proxy->setZValue(2.0);
 
         copy_buttons_.push_back({button, proxy, code});
     }
 }
 
-void MarkdownGraphicsView::resizeEvent(QResizeEvent* event) {
+void MarkdownGraphicsView::createScrollableCodeBlocks(
+    const std::vector<QString>& codes)
+{
+    if (code_block_max_lines_ <= 0 || !text_item_ || !scene()) {
+        return;
+    }
+
+    QTextDocument* document = text_item_->document();
+
+    if (!document) {
+        return;
+    }
+
+    const qreal document_width = text_item_->textWidth();
+
+    const qreal code_width =
+        qMax<qreal>(
+            100.0,
+            document_width -
+                2.0 * (kCodeBlockPadding + kCodeBlockBorder)
+        );
+
+    const int code_height =
+        codeBlockWidgetHeight(
+            code_block_max_lines_,
+            code_line_height_
+        );
+
+    for (QTextBlock block = document->begin();
+         block.isValid();
+         block = block.next()) {
+        const QString text = block.text();
+
+        if (text.isEmpty() || text.at(0) != QChar(0x2063)) {
+            continue;
+        }
+
+        int index = 0;
+
+        while (index < text.size() &&
+               text.at(index) == QChar(0x2063)) {
+            ++index;
+        }
+
+        --index;
+
+        if (index < 0 || index >= static_cast<int>(codes.size())) {
+            continue;
+        }
+
+        const QString& code = codes[index];
+
+        const int line_count =
+            1 + static_cast<int>(
+                std::count(
+                    code.begin(),
+                    code.end(),
+                    QLatin1Char('\n')
+                )
+            );
+
+        if (line_count <= code_block_max_lines_) {
+            continue;
+        }
+
+        /*
+         * Высота marker-block состоит из:
+         *
+         *   1. области под кнопку;
+         *   2. области под QPlainTextEdit.
+         *
+         * Сам редактор начинается ниже кнопки и больше не перекрывает её.
+         */
+        const QRectF block_rect =
+            document->documentLayout()->blockBoundingRect(block);
+
+        auto* editor = new CodeBlockEditor(this);
+
+        editor->setPlainText(code);
+        editor->setReadOnly(true);
+        editor->setFont(code_font_);
+        editor->setLineWrapMode(QPlainTextEdit::NoWrap);
+        editor->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        editor->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        editor->setFrameShape(QPlainTextEdit::StyledPanel);
+
+        editor->setStyleSheet(
+            QStringLiteral(
+                "QPlainTextEdit {"
+                " background:#f3f3f3;"
+                " border:1px solid #dddddd;"
+                " padding:%1px %2px;"
+                " color:#333333;"
+                "}"
+            ).arg(kCodeBlockVSpacing).arg(kCodeBlockPadding)
+        );
+
+        editor->setFixedSize(
+            static_cast<int>(std::ceil(code_width)),
+            code_height
+        );
+
+        QGraphicsProxyWidget* proxy =
+            scene()->addWidget(editor);
+
+        proxy->setPos(
+            16.0 + block_rect.left(),
+            16.0 + block_rect.top() + kCodeBlockButtonArea
+        );
+
+        proxy->setZValue(1.0);
+
+        code_blocks_.push_back(editor);
+    }
+}
+
+void MarkdownGraphicsView::resizeEvent(QResizeEvent* event)
+{
     QGraphicsView::resizeEvent(event);
-    if (event->size().width() != event->oldSize().width()) {
+
+    if (event->size() != event->oldSize()) {
         render_document();
     }
 }
@@ -621,5 +1081,249 @@ int MarkdownGraphicsView::sourceLineForCurrentScroll() const
     return qMax(0, best_anchor->line);
 }
 
+void MarkdownGraphicsView::applyCodeBlockHeights(
+    const std::vector<QString>& codes)
+{
+    if (code_block_max_lines_ <= 0 || !text_item_) {
+        return;
+    }
 
+    QTextDocument* document = text_item_->document();
+
+    if (!document || !document->documentLayout()) {
+        return;
+    }
+
+    const int editor_height =
+        codeBlockWidgetHeight(
+            code_block_max_lines_,
+            code_line_height_
+        );
+
+    bool geometry_changed = false;
+
+    for (QTextBlock block = document->begin();
+         block.isValid();
+         block = block.next()) {
+        const QString text = block.text();
+
+        if (text.isEmpty() || text.at(0) != QChar(0x2063)) {
+            continue;
+        }
+
+        int index = 0;
+
+        while (index < text.size() &&
+               text.at(index) == QChar(0x2063)) {
+            ++index;
+        }
+
+        --index;
+
+        if (index < 0 || index >= static_cast<int>(codes.size())) {
+            continue;
+        }
+
+        const QString& code = codes[index];
+
+        const int line_count =
+            1 + static_cast<int>(
+                std::count(
+                    code.begin(),
+                    code.end(),
+                    QLatin1Char('\n')
+                )
+            );
+
+        /*
+         * Обычный <pre> остаётся полностью в управлении QTextDocument.
+         * Его marker находится в первой строке <pre>, поэтому его
+         * формат и геометрию здесь не меняем.
+         */
+        if (line_count <= code_block_max_lines_) {
+            continue;
+        }
+
+        /*
+         * Длинный блок представлен отдельным <div> с marker-строкой.
+         * Высота резервируется исключительно для:
+         * - зоны кнопки;
+         * - QPlainTextEdit;
+         * - нижнего интервала между Markdown-блоками.
+         */
+        const int reserved_height =
+            kCodeBlockButtonArea +
+            editor_height +
+            12;
+
+        QTextCursor cursor(block);
+
+        QTextBlockFormat format =
+            cursor.blockFormat();
+
+        format.setLineHeight(
+            reserved_height,
+            QTextBlockFormat::FixedHeight
+        );
+
+        cursor.setBlockFormat(format);
+        geometry_changed = true;
+    }
+
+    if (!geometry_changed) {
+        return;
+    }
+
+    /*
+     * Qt может отложить пересчёт QTextDocument. Завершаем layout
+     * синхронно до получения координат blockBoundingRect() и до
+     * расчёта sceneRect.
+     */
+    document->documentLayout()->documentSize();
+
+    /*
+     * FixedHeight меняет высоту документа после setHtml(). В режиме
+     * со скроллируемыми code-block нужно явно обновить область
+     * QGraphicsTextItem; иначе часть Markdown после изменённого блока
+     * может иметь координаты в новом layout, но не попасть в область
+     * перерисовки item. В обычном режиме эта ветка не выполняется.
+     */
+    text_item_->update();
+}
+
+
+void MarkdownGraphicsView::activateCodeBlock(CodeBlockEditor* active)
+{
+    active_code_block_ = active;
+
+    for (CodeBlockEditor* block : code_blocks_) {
+        if (block) {
+            block->setActive(block == active_code_block_);
+        }
+    }
+}
+
+void MarkdownGraphicsView::mousePressEvent(QMouseEvent* event)
+{
+    activateCodeBlock(nullptr);
+    QGraphicsView::mousePressEvent(event);
+}
+
+CodeBlockEditor::CodeBlockEditor(
+    MarkdownGraphicsView* view,
+    QWidget* parent)
+    : QPlainTextEdit(parent)
+    , view_(view)
+{
+    setFocusPolicy(Qt::ClickFocus);
+}
+
+void CodeBlockEditor::setActive(bool active)
+{
+    active_ = active;
+
+    if (active_) {
+        setFocus(Qt::MouseFocusReason);
+    } else {
+        clearFocus();
+    }
+}
+
+void CodeBlockEditor::mousePressEvent(QMouseEvent* event)
+{
+    if (view_) {
+        view_->activateCodeBlock(this);
+    }
+
+    QPlainTextEdit::mousePressEvent(event);
+}
+
+void CodeBlockEditor::wheelEvent(QWheelEvent* event)
+{
+    if (active_) {
+        QPlainTextEdit::wheelEvent(event);
+        return;
+    }
+
+    /*
+     * QGraphicsProxyWidget не всегда передаёт ignored wheel-event
+     * из вложенного QPlainTextEdit в QGraphicsView. Поэтому до явного
+     * клика по блоку прокручиваем общий scrollbar preview вручную.
+     */
+    if (!view_) {
+        event->ignore();
+        return;
+    }
+
+    QScrollBar* scroll_bar = view_->verticalScrollBar();
+
+    if (!scroll_bar ||
+        scroll_bar->maximum() <= scroll_bar->minimum()) {
+        event->ignore();
+        return;
+    }
+
+    int scroll_delta = 0;
+
+    const QPoint pixel_delta = event->pixelDelta();
+
+    if (!pixel_delta.isNull()) {
+        /*
+         * Тачпад: Qt уже передаёт величину в пикселях.
+         * Положительное значение означает прокрутку вверх.
+         */
+        scroll_delta = pixel_delta.y();
+    } else {
+        /*
+         * Обычное колесо: angleDelta() измеряется в 1/8 градуса,
+         * один стандартный шаг равен 120.
+         */
+        const int angle_delta = event->angleDelta().y();
+
+        if (angle_delta != 0) {
+            const int lines_per_step =
+                qMax(1, QApplication::wheelScrollLines());
+
+            const int pixels_per_step =
+                qMax(
+                    scroll_bar->singleStep(),
+                    QFontMetrics(view_->font()).lineSpacing()
+                ) * lines_per_step;
+
+            scroll_delta =
+                (angle_delta * pixels_per_step) / 120;
+
+            /*
+             * Не теряем частичные wheel-события от некоторых мышей
+             * и тачпадов, если целочисленное деление дало ноль.
+             */
+            if (scroll_delta == 0) {
+                scroll_delta =
+                    angle_delta > 0
+                        ? pixels_per_step
+                        : -pixels_per_step;
+            }
+        }
+    }
+
+    if (scroll_delta == 0) {
+        event->ignore();
+        return;
+    }
+
+    const int new_value = qBound(
+        scroll_bar->minimum(),
+        scroll_bar->value() - scroll_delta,
+        scroll_bar->maximum()
+    );
+
+    scroll_bar->setValue(new_value);
+    event->accept();
+}
+
+void CodeBlockEditor::focusOutEvent(QFocusEvent* event)
+{
+    active_ = false;
+    QPlainTextEdit::focusOutEvent(event);
+}
 

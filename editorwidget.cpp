@@ -283,6 +283,14 @@ void EditorWidget::applySettings(const Settings &settings)
 
     m_editor->setLineNumberAreaVisible(
         settings.lineNumbers);
+
+    m_markdownView->setCodeBlockMaxLines(
+        settings.limitCodeBlockHeight ? qMax(8, settings.codeBlockMaxLines) : 0);
+
+    // Настройка влияет на отрисовку блоков кода — перерисовываем.
+    if (m_renderMd) {
+        updateMarkdownView();
+    }
 }
 
 void CodeEditor::setRenderMode(bool enabled)

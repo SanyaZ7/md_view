@@ -7,6 +7,9 @@ struct Settings
 {
     bool lineNumbers = false;
     bool wordWrap    = false;
+
+    bool limitCodeBlockHeight = false;
+    int  codeBlockMaxLines    = 20;
 };
 
 // Путь к файлу настроек (в папке проекта)
