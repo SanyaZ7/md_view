@@ -2,7 +2,7 @@
 #include "MarkdownGraphicsView.h"
 
 #include "MarkdownParser.h"
-
+#include <QShowEvent>
 #include <QAction>
 #include <QContextMenuEvent>
 #include <QFileInfo>
@@ -52,17 +52,29 @@ void CodeEditor::resizeEvent(QResizeEvent *event)
 {
     QPlainTextEdit::resizeEvent(event);
 
-    QRect cr = contentsRect();
-    int width = lineNumberAreaWidth();
-
-    m_lineNumberArea->setGeometry(
-        QRect(cr.left(), cr.top(), width, cr.height()));
+    const int width =
+        m_lineNumberArea->isVisible()
+            ? lineNumberAreaWidth()
+            : 0;
 
     if (m_lineNumberArea->isVisible()) {
         setViewportMargins(width, 0, 0, 0);
     } else {
         setViewportMargins(0, 0, 0, 0);
     }
+
+    const QRect cr = contentsRect();
+
+    m_lineNumberArea->setGeometry(
+        cr.left(),
+        cr.top(),
+        width,
+        cr.height()
+    );
+
+    m_lineNumberArea->update();
+    viewport()->update();
+    update();
 }
 
 void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event)
@@ -121,29 +133,49 @@ int CodeEditor::lineNumberAreaWidth() const
 
 void CodeEditor::updateLineNumberAreaWidth(int /*blockCount*/)
 {
+    const int width =
+        m_lineNumberArea->isVisible()
+            ? lineNumberAreaWidth()
+            : 0;
+
     if (m_lineNumberArea->isVisible()) {
-        setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
+        setViewportMargins(width, 0, 0, 0);
     } else {
         setViewportMargins(0, 0, 0, 0);
     }
+
+    const QRect cr = contentsRect();
+
+    m_lineNumberArea->setGeometry(
+        cr.left(),
+        cr.top(),
+        width,
+        cr.height()
+    );
+
+    m_lineNumberArea->update();
+    viewport()->update();
 }
 
 void CodeEditor::updateLineNumberAreaRect(
     const QRect &rect,
     int dy)
 {
-    if (dy) {
+    if (dy != 0) {
         m_lineNumberArea->scroll(0, dy);
     } else {
         m_lineNumberArea->update(
             0,
             rect.y(),
             m_lineNumberArea->width(),
-            rect.height());
+            rect.height()
+        );
     }
 
     if (rect.contains(viewport()->rect())) {
         updateLineNumberAreaWidth(0);
+        m_lineNumberArea->update();
+        viewport()->update();
     }
 }
 
@@ -180,11 +212,29 @@ void CodeEditor::setLineNumberAreaVisible(bool visible)
 {
     m_lineNumberArea->setVisible(visible);
 
+    const int width =
+        visible
+            ? lineNumberAreaWidth()
+            : 0;
+
     if (visible) {
-        setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
+        setViewportMargins(width, 0, 0, 0);
     } else {
         setViewportMargins(0, 0, 0, 0);
     }
+
+    const QRect cr = contentsRect();
+
+    m_lineNumberArea->setGeometry(
+        cr.left(),
+        cr.top(),
+        width,
+        cr.height()
+    );
+
+    m_lineNumberArea->update();
+    viewport()->update();
+    update();
 }
 
 void CodeEditor::setFilePath(const QString &filePath)
@@ -222,6 +272,40 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent *event)
     delete menu;
 }
 
+void CodeEditor::showEvent(QShowEvent *event)
+{
+    QPlainTextEdit::showEvent(event);
+
+    const int width =
+        m_lineNumberArea->isVisible()
+            ? lineNumberAreaWidth()
+            : 0;
+
+    if (m_lineNumberArea->isVisible()) {
+        setViewportMargins(width, 0, 0, 0);
+    } else {
+        setViewportMargins(0, 0, 0, 0);
+    }
+
+    const QRect cr = contentsRect();
+
+    m_lineNumberArea->setGeometry(
+        cr.left(),
+        cr.top(),
+        width,
+        cr.height()
+    );
+
+    /*
+     * При переключении вкладок область редактора может быть
+     * показана с устаревшим содержимым backing store. Полная
+     * перерисовка устраняет наложение текста и номеров строк.
+     */
+    m_lineNumberArea->update();
+    viewport()->update();
+    update();
+}
+
 // ============================================================
 // EditorWidget
 // ============================================================
@@ -251,6 +335,9 @@ EditorWidget::EditorWidget(QWidget *parent)
     connect(m_editor, &QPlainTextEdit::textChanged,
             this, &EditorWidget::updateMarkdownView);
 
+    connect(m_editor, &QPlainTextEdit::textChanged,
+            this, &EditorWidget::textChangedFlag);
+
     m_stack->setCurrentWidget(m_editor);
 }
 
@@ -267,7 +354,9 @@ QString EditorWidget::filePath() const
 
 void EditorWidget::setPlainText(const QString &text)
 {
+    m_blockSignals = true;
     m_editor->setPlainText(text);
+    m_blockSignals = false;
     updateMarkdownView();
 }
 

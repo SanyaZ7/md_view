@@ -10,7 +10,7 @@ class QContextMenuEvent;
 class QPaintEvent;
 class QResizeEvent;
 class QStackedWidget;
-
+class QShowEvent;
 class MarkdownGraphicsView;
 
 // ============================================================
@@ -44,7 +44,7 @@ private slots:
 
 private:
     class LineNumberArea *m_lineNumberArea = nullptr;
-	
+    void showEvent(QShowEvent *event) override;
     QString m_filePath;
     bool m_renderMd = false;
 };
@@ -110,6 +110,9 @@ public:
 public slots:
     void setRenderMode(bool enabled);
 
+signals:
+    void textChangedFlag();
+
 private slots:
     void updateMarkdownView();
 
@@ -120,6 +123,7 @@ private:
 	quint64 m_scrollRequestId = 0;
     QString m_filePath;
     bool m_renderMd = false;
+    bool m_blockSignals = false;
 };
 
 #endif // EDITORWIDGET_H
