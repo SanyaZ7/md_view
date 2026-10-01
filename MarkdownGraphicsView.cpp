@@ -28,6 +28,7 @@
 #include <QTextBlockFormat>
 #include <cmath>
 #include <algorithm>
+#include "Tex_AST_v2/math_renderer.h"
 
 // Геометрия прокручиваемых блоков кода (в px).
 static const int kCodeBlockPadding   = 6;
@@ -101,6 +102,9 @@ QString inline_to_html(const MarkdownNode& node) {
             return markdown_text_to_html(node.content);
         case NodeType::Bold:
             return QStringLiteral("<b>") + children_to_html(node) + QStringLiteral("</b>");
+		case NodeType::MathInline: {
+    		const std::string html =math_ast::render_inline_formula(node.content);
+    		return QString::fromUtf8(html.data(), static_cast<int>(html.size()));}
         case NodeType::Italic:
             return QStringLiteral("<i>") + children_to_html(node) + QStringLiteral("</i>");
         case NodeType::Strikethrough:
@@ -174,6 +178,9 @@ QString node_to_html(
                 .arg(level)
                 .arg(children_to_html(node));
         }
+		case NodeType::MathBlock: {
+		const std::string html =math_ast::render_block_formula(node.content);
+    		return QString::fromUtf8(html.data(), static_cast<int>(html.size()));}
 
         case NodeType::Text:
             return QStringLiteral("<p>")

@@ -1,7 +1,8 @@
 #include "mainwindow.h"
 #include "settingsdialog.h"
 #include "editorwidget.h"       // новый заголовок
-#include "./ui_mainwindow.h"
+//#include "./ui_mainwindow.h"
+#include "/home/alex/workspace/md_view/build/Release_min_size/md_view_autogen/include/ui_mainwindow.h"
 
 #include <QTabWidget>
 #include <QFileDialog>
