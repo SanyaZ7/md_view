@@ -1,0 +1,2 @@
+Command:read(MarkdownGraphicsView.cpp, MarkdownUtils::node_to_html)
+Command:read(CMakeLists.txt)

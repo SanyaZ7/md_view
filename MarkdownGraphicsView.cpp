@@ -193,7 +193,8 @@ QString node_to_html(
                        "margin:0 0 12px 0;padding-left:12px;color:#555555;\">")
                 + blocks_to_html(node.children, code_list)
                 + QStringLiteral("</blockquote>");
-
+		case NodeType::FencedMarkdown:
+   			return blocks_to_html(node.children, code_list);
         case NodeType::CodeBlock: {
             const QString code = utf8(node.content);
 
