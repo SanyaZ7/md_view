@@ -1,0 +1,178 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-c",
+      "-I/usr/include/boost",
+      "-Wall",
+      "-Wextra",
+      "-Wno-unused-parameter",
+      "-std=c++2a",
+      "-O2",
+      "-fdata-sections",
+      "-ffunction-sections",
+      "-fPIC",
+      "-flto",
+      "-x",
+      "c++",
+      "-fsyntax-only",
+      "CommonUtils.h"
+    ],
+    "directory": "/home/alex/workspace/md_view/md_lexer_v2",
+    "file": "/home/alex/workspace/md_view/md_lexer_v2/CommonUtils.h"
+  },
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-I/usr/include/boost",
+      "-Wall",
+      "-Wextra",
+      "-Wno-unused-parameter",
+      "-std=c++2a",
+      "-O2",
+      "-fdata-sections",
+      "-ffunction-sections",
+      "-fPIC",
+      "-flto",
+      "-c",
+      "-o",
+      "obj/CommonUtils.o",
+      "CommonUtils.cpp"
+    ],
+    "directory": "/home/alex/workspace/md_view/md_lexer_v2",
+    "file": "/home/alex/workspace/md_view/md_lexer_v2/CommonUtils.cpp",
+    "output": "/home/alex/workspace/md_view/md_lexer_v2/obj/CommonUtils.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-I/usr/include/boost",
+      "-Wall",
+      "-Wextra",
+      "-Wno-unused-parameter",
+      "-std=c++2a",
+      "-O2",
+      "-fdata-sections",
+      "-ffunction-sections",
+      "-fPIC",
+      "-flto",
+      "-c",
+      "-o",
+      "obj/Lexers.o",
+      "Lexers.cpp"
+    ],
+    "directory": "/home/alex/workspace/md_view/md_lexer_v2",
+    "file": "/home/alex/workspace/md_view/md_lexer_v2/Lexers.cpp",
+    "output": "/home/alex/workspace/md_view/md_lexer_v2/obj/Lexers.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-I/usr/include/boost",
+      "-Wall",
+      "-Wextra",
+      "-Wno-unused-parameter",
+      "-std=c++2a",
+      "-O2",
+      "-fdata-sections",
+      "-ffunction-sections",
+      "-fPIC",
+      "-flto",
+      "-c",
+      "-o",
+      "obj/main.o",
+      "main.cpp"
+    ],
+    "directory": "/home/alex/workspace/md_view/md_lexer_v2",
+    "file": "/home/alex/workspace/md_view/md_lexer_v2/main.cpp",
+    "output": "/home/alex/workspace/md_view/md_lexer_v2/obj/main.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-I/usr/include/boost",
+      "-Wall",
+      "-Wextra",
+      "-Wno-unused-parameter",
+      "-std=c++2a",
+      "-O2",
+      "-fdata-sections",
+      "-ffunction-sections",
+      "-fPIC",
+      "-flto",
+      "-c",
+      "-o",
+      "obj/MarkdownParser.o",
+      "MarkdownParser.cpp"
+    ],
+    "directory": "/home/alex/workspace/md_view/md_lexer_v2",
+    "file": "/home/alex/workspace/md_view/md_lexer_v2/MarkdownParser.cpp",
+    "output": "/home/alex/workspace/md_view/md_lexer_v2/obj/MarkdownParser.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-c",
+      "-I/usr/include/boost",
+      "-Wall",
+      "-Wextra",
+      "-Wno-unused-parameter",
+      "-std=c++2a",
+      "-O2",
+      "-fdata-sections",
+      "-ffunction-sections",
+      "-fPIC",
+      "-flto",
+      "-x",
+      "c++",
+      "-fsyntax-only",
+      "Lexers.h"
+    ],
+    "directory": "/home/alex/workspace/md_view/md_lexer_v2",
+    "file": "/home/alex/workspace/md_view/md_lexer_v2/Lexers.h"
+  },
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-c",
+      "-I/usr/include/boost",
+      "-Wall",
+      "-Wextra",
+      "-Wno-unused-parameter",
+      "-std=c++2a",
+      "-O2",
+      "-fdata-sections",
+      "-ffunction-sections",
+      "-fPIC",
+      "-flto",
+      "-x",
+      "c++",
+      "-fsyntax-only",
+      "MarkdownNode.h"
+    ],
+    "directory": "/home/alex/workspace/md_view/md_lexer_v2",
+    "file": "/home/alex/workspace/md_view/md_lexer_v2/MarkdownNode.h"
+  },
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-c",
+      "-I/usr/include/boost",
+      "-Wall",
+      "-Wextra",
+      "-Wno-unused-parameter",
+      "-std=c++2a",
+      "-O2",
+      "-fdata-sections",
+      "-ffunction-sections",
+      "-fPIC",
+      "-flto",
+      "-x",
+      "c++",
+      "-fsyntax-only",
+      "MarkdownParser.h"
+    ],
+    "directory": "/home/alex/workspace/md_view/md_lexer_v2",
+    "file": "/home/alex/workspace/md_view/md_lexer_v2/MarkdownParser.h"
+  }
+]
