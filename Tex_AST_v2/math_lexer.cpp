@@ -156,8 +156,7 @@ std::vector<Token> Lexer::run() {
                             source[pos])) ||
                     std::isdigit(
                         static_cast<unsigned char>(
-                            source[pos])) ||
-                    source[pos] == ' ')) {
+                            source[pos])))) {
                 ++pos;
             }
 
@@ -169,20 +168,11 @@ std::vector<Token> Lexer::run() {
                 continue;
             }
 
-            std::string name =
+            const std::string name =
                 source.substr(
                     name_begin,
                     pos - name_begin
                 );
-
-            /*
-             * Пробел после имени команды является
-             * разделителем и не входит в имя.
-             */
-            while (!name.empty() &&
-                   name.back() == ' ') {
-                name.pop_back();
-            }
 
             /*
              * \left, \right и \quad пока не создают
@@ -216,24 +206,8 @@ std::vector<Token> Lexer::run() {
                 );
             } else {
                 /*
-                 * Все остальные команды обязательно
-                 * сохраняем как TokenKind::Command.
-                 *
-                 * Сюда попадают:
-                 *
-                 *   \alpha
-                 *   \beta
-                 *   \gamma
-                 *   \varepsilon
-                 *   \mu
-                 *   \cdot
-                 *   \frac
-                 *   \hat
-                 *   \mathbf
-                 *   \sqrt
-                 *   \mathcal
-                 *
-                 * Их дальнейшая обработка выполняется
+                 * Остальные команды сохраняются как
+                 * TokenKind::Command и обрабатываются
                  * parser-ом и renderer-ом.
                  */
                 add(
@@ -356,6 +330,7 @@ std::vector<Token> Lexer::run() {
 
     return tokens;
 }
+
 
 const std::vector<std::string>& Lexer::get_errors() const {
     return errors;

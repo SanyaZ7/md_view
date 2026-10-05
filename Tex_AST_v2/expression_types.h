@@ -133,6 +133,40 @@ struct CommandWithArgument final : AstNode {
     }
 };
 
+/*
+ * Группировка в скобках.
+ *
+ * Отдельный узел нужен, чтобы сохранить сами скобки: раньше
+ * parser возвращал только содержимое "(...)", и скобки терялись
+ * при рендеринге. Поля open/close позволяют выводить разные
+ * пары: "(", ")", "[", "]", "|".
+ */
+struct Group final : AstNode {
+    AstNodePtr content;
+    std::string open;
+    std::string close;
+
+    Group(
+        AstNodePtr content,
+        std::string open,
+        std::string close
+    )
+        : content(std::move(content)),
+          open(std::move(open)),
+          close(std::move(close)) {
+    }
+
+    void print(std::ostream& out) const override {
+        out << open;
+
+        if (content) {
+            content->print(out);
+        }
+
+        out << close;
+    }
+};
+
 struct UnaryOperation final : AstNode {
     char operation;
     AstNodePtr operand;

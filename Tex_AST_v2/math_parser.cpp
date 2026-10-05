@@ -471,6 +471,13 @@ AstNodePtr Parser::parse_atom()
      * Содержимое скобок разбирается как выражение.
      */
     if (accept(TokenKind::LParen)) {
+        /*
+         * Пустые скобки "( )" раньше давали Number("1")
+         * без обёртки. Сохраняем это поведение, иначе
+         * вывелось бы "(1)".
+         */
+        const bool is_empty = check(TokenKind::RParen);
+
         AstNodePtr result =
             parse_argument_list();
 
@@ -485,7 +492,12 @@ AstNodePtr Parser::parse_atom()
             return nullptr;
         }
 
-        return result;
+        if (is_empty) {
+            return result;
+        }
+
+        return std::make_unique<Group>(
+            std::move(result), "(", ")");
     }
 
     /*
@@ -515,7 +527,8 @@ AstNodePtr Parser::parse_atom()
             return nullptr;
         }
 
-        return result;
+        return std::make_unique<Group>(
+            std::move(result), "[", "]");
     }
 
     /*

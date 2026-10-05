@@ -10,6 +10,20 @@
 
 namespace math_ast {
 
+/*
+ * Private Use Area маркеры (U+E000..U+E03F) кодируются в UTF-8
+ * как 0xEE 0x80 (0x80 | (code & 0x3F)). Рендерер передаёт их во
+ * внешний слой для inline-объектов \frac, \sqrt, \hat.
+ */
+static std::string encode_pua_marker(char16_t code)
+{
+    std::string utf8;
+    utf8.push_back(static_cast<char>(0xEE));
+    utf8.push_back(static_cast<char>(0x80));
+    utf8.push_back(static_cast<char>(0x80 | (code & 0x3F)));
+    return utf8;
+}
+
 std::string render_inline_formula(
     const std::string& source
 )
@@ -177,6 +191,78 @@ std::string render_inline_formula(
                 return std::string("μ");
             }
 
+            if (name == "nu") {
+                return std::string("ν");
+            }
+
+            if (name == "kappa") {
+                return std::string("κ");
+            }
+
+            if (name == "xi") {
+                return std::string("ξ");
+            }
+
+            if (name == "Xi") {
+                return std::string("Ξ");
+            }
+
+            if (name == "rho") {
+                return std::string("ρ");
+            }
+
+            if (name == "varrho") {
+                return std::string("ϱ");
+            }
+
+            if (name == "Rho") {
+                return std::string("Ρ");
+            }
+
+            if (name == "tau") {
+                return std::string("τ");
+            }
+
+            if (name == "upsilon") {
+                return std::string("υ");
+            }
+
+            if (name == "Upsilon") {
+                return std::string("Υ");
+            }
+
+            if (name == "phi") {
+                return std::string("φ");
+            }
+
+            if (name == "varphi") {
+                return std::string("ϕ");
+            }
+
+            if (name == "Phi") {
+                return std::string("Φ");
+            }
+
+            if (name == "chi") {
+                return std::string("χ");
+            }
+
+            if (name == "epsilon") {
+                return std::string("ε");
+            }
+
+            if (name == "zeta") {
+                return std::string("ζ");
+            }
+
+            if (name == "eta") {
+                return std::string("η");
+            }
+
+            if (name == "iota") {
+                return std::string("ι");
+            }
+
             return std::string();
         };
 
@@ -200,6 +286,319 @@ std::string render_inline_formula(
 
             if (name == "infty") {
                 return std::string("∞");
+            }
+
+            /*
+             * Крупные операторы.
+             */
+            if (name == "sum") {
+                return std::string("∑");
+            }
+
+            if (name == "prod") {
+                return std::string("∏");
+            }
+
+            if (name == "coprod") {
+                return std::string("∐");
+            }
+
+            if (name == "int") {
+                return std::string("∫");
+            }
+
+            if (name == "iint") {
+                return std::string("∬");
+            }
+
+            if (name == "iiint") {
+                return std::string("∭");
+            }
+
+            if (name == "oint") {
+                return std::string("∮");
+            }
+
+            if (name == "bigcup") {
+                return std::string("⋃");
+            }
+
+            if (name == "bigcap") {
+                return std::string("⋂");
+            }
+
+            if (name == "uplus") {
+                return std::string("⊎");
+            }
+
+            /*
+             * Отношения и стрелки.
+             */
+            if (name == "leq") {
+                return std::string("≤");
+            }
+
+            if (name == "le") {
+                return std::string("≤");
+            }
+
+            if (name == "geq") {
+                return std::string("≥");
+            }
+
+            if (name == "ge") {
+                return std::string("≥");
+            }
+
+            if (name == "neq") {
+                return std::string("≠");
+            }
+
+            if (name == "ne") {
+                return std::string("≠");
+            }
+
+            if (name == "approx") {
+                return std::string("≈");
+            }
+
+            if (name == "equiv") {
+                return std::string("≡");
+            }
+
+            if (name == "propto") {
+                return std::string("∝");
+            }
+
+            if (name == "sim") {
+                return std::string("∼");
+            }
+
+            if (name == "simeq") {
+                return std::string("≃");
+            }
+
+            if (name == "cong") {
+                return std::string("≅");
+            }
+
+            if (name == "in") {
+                return std::string("∈");
+            }
+
+            if (name == "notin") {
+                return std::string("∉");
+            }
+
+            if (name == "ni") {
+                return std::string("∋");
+            }
+
+            if (name == "subset") {
+                return std::string("⊂");
+            }
+
+            if (name == "subseteq") {
+                return std::string("⊆");
+            }
+
+            if (name == "supset") {
+                return std::string("⊃");
+            }
+
+            if (name == "supseteq") {
+                return std::string("⊇");
+            }
+
+            if (name == "cup") {
+                return std::string("∪");
+            }
+
+            if (name == "cap") {
+                return std::string("∩");
+            }
+
+            if (name == "setminus") {
+                return std::string("∖");
+            }
+
+            if (name == "emptyset") {
+                return std::string("∅");
+            }
+
+            if (name == "varnothing") {
+                return std::string("∅");
+            }
+
+            if (name == "rightarrow") {
+                return std::string("→");
+            }
+
+            if (name == "to") {
+                return std::string("→");
+            }
+
+            if (name == "longrightarrow") {
+                return std::string("→");
+            }
+
+            if (name == "leftarrow") {
+                return std::string("←");
+            }
+
+            if (name == "leftrightarrow") {
+                return std::string("↔");
+            }
+
+            if (name == "Leftrightarrow") {
+                return std::string("⇔");
+            }
+
+            if (name == "Rightarrow") {
+                return std::string("⇒");
+            }
+
+            if (name == "Leftarrow") {
+                return std::string("⇐");
+            }
+
+            if (name == "mapsto") {
+                return std::string("↦");
+            }
+
+            /*
+             * Логика и прочие символы.
+             */
+            if (name == "forall") {
+                return std::string("∀");
+            }
+
+            if (name == "exists") {
+                return std::string("∃");
+            }
+
+            if (name == "nexists") {
+                return std::string("∄");
+            }
+
+            if (name == "neg") {
+                return std::string("¬");
+            }
+
+            if (name == "lnot") {
+                return std::string("¬");
+            }
+
+            if (name == "wedge") {
+                return std::string("∧");
+            }
+
+            if (name == "land") {
+                return std::string("∧");
+            }
+
+            if (name == "vee") {
+                return std::string("∨");
+            }
+
+            if (name == "lor") {
+                return std::string("∨");
+            }
+
+            if (name == "oplus") {
+                return std::string("⊕");
+            }
+
+            if (name == "ominus") {
+                return std::string("⊖");
+            }
+
+            if (name == "otimes") {
+                return std::string("⊗");
+            }
+
+            if (name == "div") {
+                return std::string("÷");
+            }
+
+            if (name == "ast") {
+                return std::string("∗");
+            }
+
+            if (name == "star") {
+                return std::string("⋆");
+            }
+
+            if (name == "circ") {
+                return std::string("∘");
+            }
+
+            if (name == "bullet") {
+                return std::string("∙");
+            }
+
+            if (name == "degree") {
+                return std::string("°");
+            }
+
+            if (name == "prime") {
+                return std::string("′");
+            }
+
+            if (name == "angle") {
+                return std::string("∠");
+            }
+
+            if (name == "perp") {
+                return std::string("⊥");
+            }
+
+            if (name == "parallel") {
+                return std::string("∥");
+            }
+
+            if (name == "ldots") {
+                return std::string("…");
+            }
+
+            if (name == "cdots") {
+                return std::string("⋯");
+            }
+
+            if (name == "vdots") {
+                return std::string("⋮");
+            }
+
+            if (name == "ddots") {
+                return std::string("⋱");
+            }
+
+            if (name == "dots") {
+                return std::string("…");
+            }
+
+            if (name == "ell") {
+                return std::string("ℓ");
+            }
+
+            if (name == "hslash") {
+                return std::string("ℏ");
+            }
+
+            if (name == "aleph") {
+                return std::string("ℵ");
+            }
+
+            if (name == "Re") {
+                return std::string("ℜ");
+            }
+
+            if (name == "Im") {
+                return std::string("ℑ");
+            }
+
+            if (name == "wp") {
+                return std::string("℘");
             }
 
             const std::string symbol =
@@ -255,6 +654,25 @@ std::string render_inline_formula(
             }
 
             /*
+             * Группировка в скобках.
+             *
+             * Скобки сохраняются как обычный текст вокруг
+             * содержимого, чтобы они не терялись при выводе
+             * (например, \Psi(\mathbf{r}, t)).
+             */
+            if (const Group* group =
+                    dynamic_cast<const Group*>(&node)) {
+                const std::string content =
+                    group->content
+                        ? render_node(*group->content)
+                        : std::string();
+
+                return escape_html(group->open) +
+                       content +
+                       escape_html(group->close);
+            }
+
+            /*
              * Команда без аргументов:
              *
              *   \gamma
@@ -296,28 +714,19 @@ std::string render_inline_formula(
                         : std::string();
 
                if (name == "hat") {
-    /*
-     * Используем отдельный верхний слой с символом шапки.
-     * Это надёжнее, чем CSS-класс без явного стиля:
-     *
-     *   \hat{H}
-     */
-    return std::string(
-               "<span style=\"display:inline-block;"
-               "position:relative;"
-               "padding-top:3px;\">"
-               "<span style=\"position:absolute;"
-               "left:0;"
-               "right:0;"
-               "top:-4px;"
-               "text-align:center;"
-               "font-size:80%;\">"
-               "&#770;"
-               "</span>"
-           ) +
-           argument +
-           "</span>";
-}
+                    /*
+                     * \hat передаётся внешнему слою как маркерная
+                     * последовательность PUA (U+E020..U+E021).
+                     * MarkdownGraphicsView превратит её в inline-
+                     * объект, который рисует circumflex точно над
+                     * аргументом (QTextDocument игнорирует CSS-
+                     * позиционирование, поэтому прежний вариант с
+                     * position:absolute давал смещение шапки).
+                     */
+                    return encode_pua_marker(0xE020) +
+                           escape_html(argument) +
+                           encode_pua_marker(0xE021);
+                }
 
 if (name == "mathbf") {
     /*
@@ -332,16 +741,17 @@ if (name == "mathbf") {
 }
 
                 if (name == "sqrt") {
-                    return std::string(
-                               "<span class=\"math-sqrt\">"
-                               "<span class=\"math-sqrt-symbol\">"
-                               "√"
-                               "</span>"
-                               "<span class=\"math-sqrt-content\">"
-                           ) +
-                           argument +
-                           "</span>"
-                           "</span>";
+                    /*
+                     * \sqrt передаётся внешнему слою как маркерная
+                     * последовательность PUA (U+E010..U+E011).
+                     * MarkdownGraphicsView превратит её в inline-
+                     * объект, который рисует radical слева и полную
+                     * надчёркивающую черту (vinculum) над всем
+                     * подкорренным выражением.
+                     */
+                    return encode_pua_marker(0xE010) +
+                           escape_html(argument) +
+                           encode_pua_marker(0xE011);
                 }
 
                 if (name == "mathcal") {
@@ -402,31 +812,49 @@ if (name == "mathbf") {
                  * и отображается как обычный inline-оператор.
                  */
                 if (binary->operation == "frac") {
-                    return std::string(
-                               "<table class=\"math-frac\" "
-                               "cellspacing=\"0\" "
-                               "cellpadding=\"0\" "
-                               "style=\"vertical-align:middle;"
-                               "border-collapse:collapse;\">"
-                               "<tr>"
-                               "<td align=\"center\" "
-                               "style=\"border-bottom:"
-                               "1px solid #333333;"
-                               "padding:0 3px;\">"
-                           ) +
-                           left +
-                           "</td>"
-                           "</tr>"
-                           "<tr>"
-                           "<td align=\"center\" "
-                           "style=\"padding:0 3px;\">"
-                           +
-                           right +
-                           "</td>"
-                           "</tr>"
-                           "</table>";
-                }
+                    /*
+                     * QTextDocument игнорирует display:inline-table,
+                     * поэтому любая <table> разбивает строку.
+                     *
+                     * Дробь передаётся во внешний слой как маркерный
+                     * токен из символов Private Use Area:
+                     *
+                     *   U+E000 <числитель> U+E001 <знаменатель> U+E002
+                     *
+                     * Числитель и знаменатель HTML-экранируются, чтобы
+                     * QTextDocument не применил их теги (<i>, <sup>) к
+                     * символам токена, а сохранил как литеральный текст.
+                     * MarkdownGraphicsView извлечёт их и отрисует дробь
+                     * inline-объектом (QTextObjectInterface), который
+                     * не вызывает переноса строки.
+                     */
+                    const char16_t frac_begin = 0xE000;
+                    const char16_t frac_sep   = 0xE001;
+                    const char16_t frac_end   = 0xE002;
 
+                    const auto encode_marker =
+                        [](char16_t code) {
+                            /*
+                             * Кодовые точки U+E000..U+E002 кодируются
+                             * в UTF-8 как 0xEE 0x80 0xNN.
+                             */
+                            std::string utf8;
+                            utf8.push_back(
+                                static_cast<char>(0xEE));
+                            utf8.push_back(
+                                static_cast<char>(0x80));
+                            utf8.push_back(
+                                static_cast<char>(
+                                    0x80 | (code & 0x3F)));
+                            return utf8;
+                        };
+
+                    return encode_marker(frac_begin) +
+                           escape_html(left) +
+                           encode_marker(frac_sep) +
+                           escape_html(right) +
+                           encode_marker(frac_end);
+                }
                 /*
                  * Неявное умножение.
                  */

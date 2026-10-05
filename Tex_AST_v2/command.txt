@@ -1,8 +1,4 @@
-Command:read(Tex_AST_v2/expression_types.h)
-Command:read(Tex_AST_v2/math_lexer.h)
-Command:read(Tex_AST_v2/math_lexer.cpp, math_ast::Lexer::run)
-Command:read(Tex_AST_v2/math_parser.h)
-Command:read(Tex_AST_v2/math_parser.cpp, [math_ast::Parser::parse_relation, math_ast::Parser::parse_multiplication, math_ast::Parser::parse_atom, math_ast::Parser::parse_postfix, math_ast::Parser::parse_argument_list, math_ast::Parser::parse_document])
-Command:read(Tex_AST_v2/math_renderer.h)
-Command:read(Tex_AST_v2/math_renderer.cpp, [math_ast::render_inline_formula, math_ast::render_block_formula])
 
+Command:read(Tex_AST_v2/math_renderer.h)
+Command:read(Tex_AST_v2/math_renderer.cpp)
+Command:read(Tex_AST_v2/expression_types.h)

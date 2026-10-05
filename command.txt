@@ -1,2 +1,1 @@
-Command:read(MarkdownGraphicsView.cpp, MarkdownUtils::node_to_html)
-Command:read(CMakeLists.txt)
+Command:read(MarkdownMathObjects.cpp, containsNestedMath)

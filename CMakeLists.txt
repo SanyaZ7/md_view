@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.5)
 
+# ============================================================
+# Always export compile_commands.json
+# (must be set before project() / target creation)
+# ============================================================
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 project(md_view VERSION 0.1 LANGUAGES CXX)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -94,6 +101,20 @@ set(PROJECT_SOURCES
 
     MarkdownGraphicsView.cpp
     MarkdownGraphicsView.h
+
+    MarkdownHtmlRenderer.cpp
+    MarkdownHtmlRenderer.h
+
+    MarkdownMathObjects.cpp
+    MarkdownMathObjects.h
+
+    MarkdownCodeBlocks.cpp
+    MarkdownCodeBlocks.h
+
+    MarkdownSourceNavigation.cpp
+
+    CodeBlockEditor.cpp
+    CodeBlockEditor.h
 
     settings.cpp
     settings.h
@@ -192,15 +213,29 @@ if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(md_view)
 endif()
 
-# ← добавлено
-if(CMAKE_EXPORT_COMPILE_COMMANDS)
-    add_custom_target(update_compile_commands ALL
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_BINARY_DIR}/compile_commands.json"
-            "${CMAKE_SOURCE_DIR}/compile_commands.json"
-        COMMENT "Updating compile_commands.json in project root"
-        VERBATIM
-    )
-    add_dependencies(update_compile_commands md_view)
-endif()
 
+# ============================================================
+# Regenerate compile_commands.json on every build
+#
+# Works for any CMAKE_BUILD_TYPE (Debug / Release / RelWithDebInfo
+# / MinSizeRel / empty) and any generator (Make / Ninja / ...).
+#
+# The target has no OUTPUT, so CMake treats it as always out-of-date
+# and re-runs it on every `make` / `ninja` / `cmake --build`.
+# ============================================================
+
+add_custom_target(update_compile_commands ALL
+    COMMAND ${CMAKE_COMMAND}
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+        -S "${CMAKE_SOURCE_DIR}"
+        -B "${CMAKE_BINARY_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_BINARY_DIR}/compile_commands.json"
+        "${CMAKE_SOURCE_DIR}/compile_commands.json"
+    COMMENT "Regenerating compile_commands.json in project root"
+    VERBATIM
+)
+
+# Запускать цель только после сборки md_view,
+# чтобы не было гонки за CMakeCache.txt с текущим прогоном сборки.
+add_dependencies(update_compile_commands md_view)

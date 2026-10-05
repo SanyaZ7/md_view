@@ -1,2 +1,7 @@
 
-//:h,cpp
+
+AGENTS.md;
+#//:h;
+MarkdownGraphicsView.h;
+MarkdownHtmlRenderer.h;
+MarkdownMathObjects.h;

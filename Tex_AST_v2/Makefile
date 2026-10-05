@@ -37,7 +37,7 @@ ARFLAGS := rcs
 
 # rpath: '$$ORIGIN' — двойной $ защищает от съедания make/eval,
 # линкер получит буквально -Wl,-rpath,'$ORIGIN'
-RPATH_FLAG := -Wl,-rpath,'$$ORIGIN'
+RPATH_FLAG := -Wl,-rpath,'$$$$ORIGIN'
 
 # ----------------------------------------------------------------------
 # Source files
