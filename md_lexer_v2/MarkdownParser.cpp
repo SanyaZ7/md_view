@@ -617,7 +617,8 @@ void MarkdownParser::process_table(
 // ============================================================
 
 std::vector<MarkdownNode> MarkdownParser::parse_blocks(
-    const std::string& text
+    const std::string& text,
+    int start_line
 )
 {
     std::vector<MarkdownNode> result;
@@ -625,6 +626,66 @@ std::vector<MarkdownNode> MarkdownParser::parse_blocks(
     if (text.empty()) {
         return result;
     }
+
+    /*
+     * Считает количество переводов строк в text[0, offset).
+     * Результат - номер строки (относительно начала text), на
+     * которой находится позиция offset. LF, CR и CRLF считаются
+     * одним переводом.
+     */
+    const auto lineCount = [&text](std::size_t offset) {
+        if (offset > text.size()) {
+            offset = text.size();
+        }
+
+        int lines = 0;
+
+        for (std::size_t i = 0; i < offset; ++i) {
+            if (text[i] == '\n') {
+                ++lines;
+            } else if (text[i] == '\r') {
+                if (i + 1 >= offset || text[i + 1] != '\n') {
+                    ++lines;
+                }
+            }
+        }
+
+        return lines;
+    };
+
+    /*
+     * Пропускает переводы строк, начиная с offset, и возвращает
+     * позицию первого символа, не являющегося переводом строки.
+     * Используется, чтобы пустые строки между блоками не сдвигали
+     * координаты последующих узлов (следующий блок начинается на
+     * первой непустой строке).
+     */
+    const auto skip_leading_breaks = [&text](std::size_t offset) {
+        while (offset < text.size() &&
+               (text[offset] == '\n' || text[offset] == '\r')) {
+            ++offset;
+        }
+
+        return offset;
+    };
+
+    /*
+     * Назначает узлу исходные координаты, только если разбор
+     * ведётся с известной абсолютной строкой (start_line >= 0).
+     */
+    const auto assign_lines = [start_line, &lineCount](
+        MarkdownNode& node,
+        std::size_t begin_offset,
+        std::size_t end_offset) {
+        if (start_line < 0) {
+            return;
+        }
+
+        node.source_start_line =
+            start_line + lineCount(begin_offset);
+        node.source_end_line =
+            start_line + lineCount(end_offset);
+    };
 
     std::vector<Lexer*> block_lexers;
 
@@ -708,20 +769,35 @@ std::vector<MarkdownNode> MarkdownParser::parse_blocks(
             std::move(parsed.node);
 
         prepare_node(node);
-        result.push_back(std::move(node));
 
-        std::size_t consumed =
+        const std::size_t block_length =
             std::min(parsed.length, text.length());
 
+        assign_lines(node, 0, block_length);
+        result.push_back(std::move(node));
+
+        /*
+         * Вычисляем смещение строки для остатка до удаления
+         * переводов строк, чтобы рекурсивный разбор получил
+         * корректную абсолютную координату.
+         */
+        const std::size_t rest_begin =
+            skip_leading_breaks(block_length);
+
         std::string rest =
-            text.substr(consumed);
+            text.substr(block_length);
 
         remove_line_breaks_at_beginning(rest);
         remove_line_breaks_at_end(rest);
 
         if (!rest.empty()) {
+            const int rest_start_line =
+                (start_line >= 0)
+                    ? start_line + lineCount(rest_begin)
+                    : -1;
+
             std::vector<MarkdownNode> more =
-                parse_blocks(rest);
+                parse_blocks(rest, rest_start_line);
 
             for (MarkdownNode& more_node : more) {
                 result.push_back(std::move(more_node));
@@ -794,6 +870,7 @@ std::vector<MarkdownNode> MarkdownParser::parse_blocks(
             paragraph.children =
                 parse_inline(prefix);
 
+            assign_lines(paragraph, 0, block_position);
             result.push_back(std::move(paragraph));
         }
 
@@ -801,7 +878,6 @@ std::vector<MarkdownNode> MarkdownParser::parse_blocks(
             std::move(block_result.node);
 
         prepare_node(node);
-        result.push_back(std::move(node));
 
         std::size_t consumed =
             block_position + block_result.length;
@@ -810,6 +886,15 @@ std::vector<MarkdownNode> MarkdownParser::parse_blocks(
             consumed = text.length();
         }
 
+        assign_lines(node, block_position, consumed);
+        result.push_back(std::move(node));
+
+        /*
+         * Смещение строки остатка считаем до удаления переводов.
+         */
+        const std::size_t rest_begin =
+            skip_leading_breaks(consumed);
+
         std::string rest =
             text.substr(consumed);
 
@@ -817,8 +902,13 @@ std::vector<MarkdownNode> MarkdownParser::parse_blocks(
         remove_line_breaks_at_end(rest);
 
         if (!rest.empty()) {
+            const int rest_start_line =
+                (start_line >= 0)
+                    ? start_line + lineCount(rest_begin)
+                    : -1;
+
             std::vector<MarkdownNode> more =
-                parse_blocks(rest);
+                parse_blocks(rest, rest_start_line);
 
             for (MarkdownNode& more_node : more) {
                 result.push_back(std::move(more_node));
@@ -837,6 +927,7 @@ std::vector<MarkdownNode> MarkdownParser::parse_blocks(
     paragraph.children =
         parse_inline(text);
 
+    assign_lines(paragraph, 0, text.length());
     result.push_back(std::move(paragraph));
 
     return result;
@@ -963,28 +1054,17 @@ std::vector<MarkdownNode> MarkdownParser::parse(
 
         if (!block.empty() &&
             !is_blank_line(block)) {
-            std::vector<MarkdownNode> blocks =
-                parse_blocks(block);
-
-            const int start_line =
-                lineAt(position);
-
-            const int end_line =
-                lineAt(block_end);
-
             /*
-             * parse_blocks() работает с локальной копией блока,
-             * поэтому назначаем каждому созданному узлу диапазон
-             * исходного блока.
-             *
-             * Для верхнеуровневого скролла этого достаточно:
-             * каждый визуальный Markdown-блок получает устойчивую
-             * исходную строку и не зависит от текста внутри него.
+             * position указывает на первый непустой символ блока,
+             * поэтому lineAt(position) - фактическая строка начала.
+             * parse_blocks() проставит каждому верхнеуровневому узлу
+             * его собственные координаты; пустые строки между блоками
+             * не сдвигают последующие позиции.
              */
-            for (MarkdownNode& node : blocks) {
-                node.source_start_line = start_line;
-                node.source_end_line = end_line;
+            std::vector<MarkdownNode> blocks =
+                parse_blocks(block, lineAt(position));
 
+            for (MarkdownNode& node : blocks) {
                 document.push_back(
                     std::move(node)
                 );

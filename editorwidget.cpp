@@ -242,6 +242,78 @@ void CodeEditor::setFilePath(const QString &filePath)
     m_filePath = filePath;
 }
 
+int CodeEditor::firstVisibleSourceLine() const
+{
+    /*
+     * В QPlainTextEdit один QTextBlock соответствует одной строке
+     * исходника (word wrap не создаёт новых блоков), поэтому номер
+     * блока и есть номер исходной строки (0-based).
+     */
+    QTextBlock block = firstVisibleBlock();
+
+    if (!block.isValid()) {
+        return 0;
+    }
+
+    /*
+     * Первый видимый блок может быть виден лишь частично снизу
+     * предыдущей прокрутки. Если его верх уже ушёл за верхнюю
+     * границу viewport, берём следующий блок как «верх видимой строки».
+     */
+    qreal top =
+        blockBoundingGeometry(block)
+            .translated(contentOffset())
+            .top();
+
+    if (top < 0.0) {
+        const QTextBlock next = block.next();
+
+        if (next.isValid()) {
+            return next.blockNumber();
+        }
+    }
+
+    return block.blockNumber();
+}
+
+void CodeEditor::scrollToSourceLine(int line)
+{
+    const int blockCount = this->blockCount();
+
+    if (blockCount <= 0) {
+        return;
+    }
+
+    const int target = qBound(0, line, blockCount - 1);
+
+    QTextBlock block = document()->findBlockByNumber(target);
+
+    if (!block.isValid()) {
+        verticalScrollBar()->setValue(
+            verticalScrollBar()->minimum());
+
+        return;
+    }
+
+    /*
+     * blockBoundingGeometry(...).translated(contentOffset()).top()
+     * — это позиция верха блока относительно viewport при ТЕКУЩЕМ
+     * значении полосы прокрутки. Чтобы поместить блок к верхней
+     * границе, к текущему значению прибавляем эту позицию.
+     */
+    const qreal block_top =
+        blockBoundingGeometry(block)
+            .translated(contentOffset())
+            .top();
+
+    const int target_value =
+        qBound(verticalScrollBar()->minimum(),
+               verticalScrollBar()->value() + qRound(block_top),
+               verticalScrollBar()->maximum());
+
+    verticalScrollBar()->setValue(target_value);
+}
+
 void CodeEditor::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu *menu = createStandardContextMenu();
@@ -338,6 +410,25 @@ EditorWidget::EditorWidget(QWidget *parent)
     connect(m_editor, &QPlainTextEdit::textChanged,
             this, &EditorWidget::textChangedFlag);
 
+    /*
+     * Двусторонняя синхронизация прокрутки. Синхронизируем только
+     * прокрутку видимого (активного) виджета, чтобы скрытый виджет
+     * обновлялся в фоне, а программная прокрутка не вызывала цикл.
+     */
+    connect(m_editor->verticalScrollBar(), &QScrollBar::valueChanged,
+            this, [this]() {
+                if (!m_renderMd) {
+                    syncScrollFromEditor();
+                }
+            });
+
+    connect(m_markdownView->verticalScrollBar(), &QScrollBar::valueChanged,
+            this, [this]() {
+                if (m_renderMd) {
+                    syncScrollFromMarkdownView();
+                }
+            });
+
     m_stack->setCurrentWidget(m_editor);
 }
 
@@ -394,49 +485,54 @@ void EditorWidget::setRenderMode(bool enabled)
     }
 
     /*
-     * Increase request id to cancel any pending scroll‑restore
-     * from a previous (now obsolete) mode switch.
+     * Увеличиваем request id, чтобы отменить любую отложенную
+     * прокрутку от предыдущего (уже неактуального) переключения
+     * режимов.
      */
     const quint64 request_id = ++m_scrollRequestId;
 
+    /*
+     * На время переключения полностью отключаем live-синхронизацию:
+     * смена виджета и пересчёт sceneRect сдвигают scrollbar, что не
+     * должно запускать обратную прокрутку и давать перескок.
+     */
+    m_switchingScroll = true;
+
+    /*
+     * Позиция определяется через исходную строку, а не через
+     * отношение значений scrollbar: в raw и rendered режимах
+     * вертикальная прокрутка имеет разный смысл.
+     */
     if (enabled) {
-        // ---------- Switch to RENDERED view ----------
-        QScrollBar* editorScroll = m_editor->verticalScrollBar();
-        const int  editorMax   = editorScroll->maximum();
-        const int  editorVal   = editorScroll->value();
-        const qreal ratio      = (editorMax > 0)
-                                     ? static_cast<qreal>(editorVal) / editorMax
-                                     : 0.0;
+        // ---------- Переход в RENDERED ----------
+        const int source_line = m_editor->firstVisibleSourceLine();
 
         m_renderMd = enabled;
         m_editor->setRenderMode(enabled);
         m_markdownView->setRenderMode(enabled);
 
         m_stack->setCurrentWidget(m_markdownView);
-        updateMarkdownView();               // rebuilds HTML, sets scene rect
+        updateMarkdownView();               // пересобирает HTML и якоря
 
-        QTimer::singleShot(0, this, [this, ratio, request_id]() {
+        /*
+         * Якоря готовы только после завершения layout rendered
+         * документа. Восстанавливаем позицию в следующем event loop,
+         * сверяясь с request id и текущим виджетом стека.
+         */
+        QTimer::singleShot(0, this, [this, source_line, request_id]() {
             if (request_id != m_scrollRequestId ||
                 !m_renderMd ||
                 m_stack->currentWidget() != m_markdownView) {
                 return;
             }
 
-            QScrollBar* viewScroll = m_markdownView->verticalScrollBar();
-            const int   viewMax    = viewScroll->maximum();
-            const int   target     = qBound(viewScroll->minimum(),
-                                            qRound(ratio * viewMax),
-                                            viewScroll->maximum());
-            viewScroll->setValue(target);
+            m_markdownView->scrollToSourceLine(source_line);
+            m_switchingScroll = false;
         });
     } else {
-        // ---------- Switch to RAW TEXT editor ----------
-        QScrollBar* viewScroll = m_markdownView->verticalScrollBar();
-        const int   viewMax    = viewScroll->maximum();
-        const int   viewVal    = viewScroll->value();
-        const qreal ratio      = (viewMax > 0)
-                                     ? static_cast<qreal>(viewVal) / viewMax
-                                     : 0.0;
+        // ---------- Переход в RAW TEXT ----------
+        const int source_line =
+            m_markdownView->sourceLineForCurrentScroll();
 
         m_renderMd = enabled;
         m_editor->setRenderMode(enabled);
@@ -444,21 +540,49 @@ void EditorWidget::setRenderMode(bool enabled)
 
         m_stack->setCurrentWidget(m_editor);
 
-        QTimer::singleShot(0, this, [this, ratio, request_id]() {
+        QTimer::singleShot(0, this, [this, source_line, request_id]() {
             if (request_id != m_scrollRequestId ||
                 m_renderMd ||
                 m_stack->currentWidget() != m_editor) {
                 return;
             }
 
-            QScrollBar* editorScroll = m_editor->verticalScrollBar();
-            const int   editorMax    = editorScroll->maximum();
-            const int   target       = qBound(editorScroll->minimum(),
-                                              qRound(ratio * editorMax),
-                                              editorScroll->maximum());
-            editorScroll->setValue(target);
+            m_editor->scrollToSourceLine(source_line);
+            m_switchingScroll = false;
         });
     }
+}
+
+void EditorWidget::syncScrollFromEditor()
+{
+    /*
+     * Прокрутка выполняется программно (в ответ на синхронизацию из
+     * rendered), идёт пересоздание или переключение режима — не
+     * запускаем обратную волну.
+     */
+    if (m_syncingScroll || m_switchingScroll || m_blockSignals) {
+        return;
+    }
+
+    const int source_line = m_editor->firstVisibleSourceLine();
+
+    m_syncingScroll = true;
+    m_markdownView->scrollToSourceLine(source_line);
+    m_syncingScroll = false;
+}
+
+void EditorWidget::syncScrollFromMarkdownView()
+{
+    if (m_syncingScroll || m_switchingScroll || m_blockSignals) {
+        return;
+    }
+
+    const int source_line =
+        m_markdownView->sourceLineForCurrentScroll();
+
+    m_syncingScroll = true;
+    m_editor->scrollToSourceLine(source_line);
+    m_syncingScroll = false;
 }
 
 void EditorWidget::updateMarkdownView()
@@ -469,8 +593,6 @@ void EditorWidget::updateMarkdownView()
 
     const QString source_text =
         m_editor->toPlainText();
-
-    m_markdownView->setSourceText(source_text);
 
     const QByteArray utf8Text =
         source_text.toUtf8();

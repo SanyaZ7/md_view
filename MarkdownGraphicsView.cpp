@@ -38,16 +38,6 @@ MarkdownGraphicsView::MarkdownGraphicsView(QWidget* parent)
     setBackgroundBrush(palette().brush(QPalette::Base));
 }
 
-void MarkdownGraphicsView::setSourceText(const QString& text)
-{
-    if (source_text_ == text) {
-        return;
-    }
-
-    source_text_ = text;
-    source_anchors_.clear();
-}
-
 void MarkdownGraphicsView::setDocument(
     const std::vector<MarkdownNode>& document)
 {
@@ -95,6 +85,19 @@ void MarkdownGraphicsView::render_document()
     document_scene->clear();
     text_item_ = nullptr;
     source_anchors_.clear();
+
+    /*
+     * Список исходных строк верхнеуровневых узлов, для которых
+     * рендерер вставляет навигационный маркер. Порядок и критерий
+     * (source_start_line >= 0) совпадают с blocks_to_html(with_nav).
+     */
+    nav_source_lines_.clear();
+
+    for (const MarkdownNode& node : document_) {
+        if (node.source_start_line >= 0) {
+            nav_source_lines_.push_back(node.source_start_line);
+        }
+    }
 
     const int viewport_width =
         qMax(300, viewport()->width());
@@ -158,7 +161,8 @@ void MarkdownGraphicsView::render_document()
         + MarkdownUtils::blocks_to_html(
             document_,
             &code_list,
-            render_options)
+            render_options,
+            /*with_nav=*/true)
         + QStringLiteral("</body></html>");
 
     item->setHtml(html);
@@ -279,6 +283,14 @@ void MarkdownGraphicsView::render_document()
                 0.0,
                 viewport_width,
                 qMax(32.0, scene_height));
+
+            /*
+             * Якоря навигации зависят от итоговой геометрии блоков,
+             * поэтому перестраиваются вместе с rect сцены: после
+             * первичного layout, documentSizeChanged и отложенного
+             * вызова в следующем event loop.
+             */
+            rebuildSourceAnchors();
         };
 
     update_scene_rect();

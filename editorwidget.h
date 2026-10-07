@@ -30,6 +30,17 @@ public:
     void setFilePath(const QString &filePath);
     void setRenderMode(bool enabled);
 
+    /*
+     * Навигация по исходным строкам (нумерация с нуля).
+     *
+     * Используются реальные QTextBlock и геометрия QPlainTextEdit,
+     * поэтому переносы строк (word wrap) и нумерация строк учитываются.
+     * Значение vertical scrollbar в raw-режиме не сопоставляется напрямую
+     * с rendered-режимом.
+     */
+    int firstVisibleSourceLine() const;
+    void scrollToSourceLine(int line);
+
 signals:
     void renderModeRequested(bool enabled);
 
@@ -115,6 +126,8 @@ signals:
 
 private slots:
     void updateMarkdownView();
+    void syncScrollFromEditor();
+    void syncScrollFromMarkdownView();
 
 private:
     CodeEditor *m_editor = nullptr;
@@ -124,6 +137,21 @@ private:
     QString m_filePath;
     bool m_renderMd = false;
     bool m_blockSignals = false;
+
+    /*
+     * Защита от циклической синхронизации прокрутки: программная
+     * прокрутка одной стороны не должна запускать синхронизацию
+     * обратно к другой стороне.
+     */
+    bool m_syncingScroll = false;
+
+    /*
+     * Установлен на всё время переключения режимов: подавляет
+     * live-синхронизацию, пока виджет и его layout перестраиваются
+     * (пересчёт sceneRect сам сдвигает scrollbar и не должен
+     * запускать обратную прокрутку другой стороны).
+     */
+    bool m_switchingScroll = false;
 };
 
 #endif // EDITORWIDGET_H

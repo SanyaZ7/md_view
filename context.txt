@@ -2,6 +2,8 @@
 
 AGENTS.md;
 #//:h;
+MarkdownSourceNavigation.cpp;
+md_lexer_v2/MarkdownNode.h;
+MarkdownHtmlRenderer.cpp;
 MarkdownGraphicsView.h;
-MarkdownHtmlRenderer.h;
-MarkdownMathObjects.h;
+editorwidget.cpp;

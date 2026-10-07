@@ -1,1 +1,3 @@
-Command:read(MarkdownMathObjects.cpp, containsNestedMath)
+Command:read(MarkdownGraphicsView.cpp, [MarkdownGraphicsView::MarkdownGraphicsView, MarkdownGraphicsView::setDocument, MarkdownGraphicsView::render_document, MarkdownGraphicsView::resizeEvent])
+
+Command:read(MarkdownCodeBlocks.cpp, [MarkdownGraphicsView::applyCodeBlockHeights, MarkdownGraphicsView::createScrollableCodeBlocks, MarkdownGraphicsView::createCopyButtons])

@@ -10,31 +10,6 @@
 #include <string>
 #include <vector>
 
-// Пространство имен с утилитами рендеринга Markdown.
-namespace MarkdownUtils
-{
-    QString markdown_text_to_html(const std::string& value);
-    QString utf8(const std::string& value);
-    QString escape_html(const std::string& value);
-    QString alignment_to_css(Alignment alignment);
-
-    QString node_to_html(
-        const MarkdownNode& node,
-        std::vector<QString>* code_list = nullptr);
-
-    QString inline_to_html(const MarkdownNode& node);
-    QString children_to_html(const MarkdownNode& node);
-    QString list_to_html(const MarkdownNode& node);
-    QString table_to_html(const MarkdownNode& node);
-
-    QString blocks_to_html(
-        const std::vector<MarkdownNode>& nodes,
-        std::vector<QString>* code_list = nullptr);
-
-    // Утилита для поиска строк.
-    QString sourceLineCandidate(const QString& source_line);
-}
-
 class QContextMenuEvent;
 class QGraphicsProxyWidget;
 class QGraphicsTextItem;
@@ -50,7 +25,6 @@ class MarkdownGraphicsView : public QGraphicsView
 public:
     explicit MarkdownGraphicsView(QWidget* parent = nullptr);
 
-    void setSourceText(const QString& text);
     void scrollToSourceLine(int line);
     int sourceLineForCurrentScroll() const;
 
@@ -90,9 +64,16 @@ private:
         qreal y = 0.0;
     };
 
-    QString source_text_;
     QGraphicsTextItem* text_item_ = nullptr;
     mutable std::vector<SourceAnchor> source_anchors_;
+
+    /*
+     * Исходные строки верхнеуровневых узлов с заданным
+     * source_start_line, в порядке появления в документе.
+     * По ним строится соответствие raw<->rendered через
+     * невидимые маркеры в QTextDocument.
+     */
+    std::vector<int> nav_source_lines_;
 
     void rebuildSourceAnchors() const;
 
