@@ -14,6 +14,8 @@
 #include <QTimer>
 #include <QTextBlock>
 #include <QTextCursor>
+#include <QAbstractTextDocumentLayout>
+#include <QDebug>
 
 // ============================================================
 // LineNumberArea
@@ -296,6 +298,20 @@ void CodeEditor::scrollToSourceLine(int line)
     }
 
     /*
+     * QPlainTextEdit раскладывает блоки лениво: для блока далеко за
+     * пределами видимой области blockBoundingGeometry() недостоверна,
+     * пока блок не разложен. Без форса раскладки относительная формула
+     * ниже даёт мусор, и qBound зажимает результат в minimum()/maximum()
+     * — визуально это прыжок в начало или конец документа.
+     *
+     * Раскладываем целевой блок через временный курсор + ensureCursorVisible,
+     * затем возвращаем исходную позицию каретки (это не сдвигает прокрутку).
+     */
+    const QTextCursor saved_cursor = textCursor();
+    setTextCursor(QTextCursor(block));
+    ensureCursorVisible();
+
+    /*
      * blockBoundingGeometry(...).translated(contentOffset()).top()
      * — это позиция верха блока относительно viewport при ТЕКУЩЕМ
      * значении полосы прокрутки. Чтобы поместить блок к верхней
@@ -306,11 +322,36 @@ void CodeEditor::scrollToSourceLine(int line)
             .translated(contentOffset())
             .top();
 
+    const qreal abs_top =
+        document()->documentLayout()->blockBoundingRect(block).top();
+
     const int target_value =
         qBound(verticalScrollBar()->minimum(),
                verticalScrollBar()->value() + qRound(block_top),
                verticalScrollBar()->maximum());
 
+    qDebug().noquote()
+        << "[NAV] CodeEditor::scrollToSourceLine target(line)=" << line
+        << "blockCount=" << blockCount
+        << "block_top=" << block_top
+        << "abs_top=" << abs_top
+        << "cur=" << verticalScrollBar()->value()
+        << "->set=" << target_value
+        << "(min,max)=(" << verticalScrollBar()->minimum()
+        << "," << verticalScrollBar()->maximum() << ")"
+        << "editorVisible=" << isVisible();
+
+    verticalScrollBar()->setValue(target_value);
+
+    /*
+     * QPlainTextEdit::setTextCursor сам прокручивает документ к
+     * курсору, поэтому восстановление saved_cursor отменило бы
+     * только что выставленную позицию (каретка до позиционирования
+     * обычно в начале — прокрутка возвращалась к 0). Сначала
+     * возвращаем каретку, затем повторно ставим целевое значение:
+     * финальное слово остаётся за прокруткой, а не за курсором.
+     */
+    setTextCursor(saved_cursor);
     verticalScrollBar()->setValue(target_value);
 }
 
@@ -507,6 +548,10 @@ void EditorWidget::setRenderMode(bool enabled)
         // ---------- Переход в RENDERED ----------
         const int source_line = m_editor->firstVisibleSourceLine();
 
+        qDebug().noquote()
+            << "[SWITCH] ->RENDERED captured source_line=" << source_line
+            << "request_id=" << request_id;
+
         m_renderMd = enabled;
         m_editor->setRenderMode(enabled);
         m_markdownView->setRenderMode(enabled);
@@ -523,16 +568,47 @@ void EditorWidget::setRenderMode(bool enabled)
             if (request_id != m_scrollRequestId ||
                 !m_renderMd ||
                 m_stack->currentWidget() != m_markdownView) {
+                qDebug() << "[SWITCH] ->RENDERED singleShot SKIPPED"
+                         << "request_id=" << request_id
+                         << "cur=" << m_scrollRequestId;
                 return;
             }
+
+            qDebug().noquote()
+                << "[SWITCH] ->RENDERED apply scrollToSourceLine"
+                << source_line
+                << "mdview visible=" << m_markdownView->isVisible()
+                << "width=" << m_markdownView->width();
 
             m_markdownView->scrollToSourceLine(source_line);
             m_switchingScroll = false;
         });
     } else {
         // ---------- Переход в RAW TEXT ----------
+        //
+        // Диагностика положения rendered view ДО считывания строки:
+        // если scrollbar уже сброшен к началу (value==minimum) до
+        // sourceLineForCurrentScroll(), строка будет 0 независимо от
+        // корректности якорей.
+        QScrollBar *md_sb = m_markdownView->verticalScrollBar();
+        const QRectF md_scene_rect = m_markdownView->sceneRect();
+
+        qDebug().noquote()
+            << "[SWITCH] ->RAW pre-capture mdview visible="
+            << m_markdownView->isVisible()
+            << "stackCurrentIsMd="
+            << (m_stack->currentWidget() == m_markdownView)
+            << "scrollbar(value,min,max)=("
+            << md_sb->value() << "," << md_sb->minimum() << ","
+            << md_sb->maximum() << ")"
+            << "sceneRect=" << md_scene_rect;
+
         const int source_line =
             m_markdownView->sourceLineForCurrentScroll();
+
+        qDebug().noquote()
+            << "[SWITCH] ->RAW captured source_line=" << source_line
+            << "request_id=" << request_id;
 
         m_renderMd = enabled;
         m_editor->setRenderMode(enabled);
@@ -544,10 +620,35 @@ void EditorWidget::setRenderMode(bool enabled)
             if (request_id != m_scrollRequestId ||
                 m_renderMd ||
                 m_stack->currentWidget() != m_editor) {
+                qDebug() << "[SWITCH] ->RAW singleShot SKIPPED"
+                         << "request_id=" << request_id
+                         << "cur=" << m_scrollRequestId;
                 return;
             }
 
+            qDebug().noquote()
+                << "[SWITCH] ->RAW apply scrollToSourceLine"
+                << source_line
+                << "editor visible=" << m_editor->isVisible()
+                << "width=" << m_editor->width()
+                << "viewportW=" << m_editor->viewport()->width()
+                << "blockCount=" << m_editor->blockCount()
+                << "sb(max)=" << m_editor->verticalScrollBar()->maximum();
+
+            // Принудительно завершаем layout редактора до позиционирования.
+            m_editor->document()->documentLayout()->documentSize();
+
             m_editor->scrollToSourceLine(source_line);
+
+            const int sb_after = m_editor->verticalScrollBar()->value();
+            const int first_line_after = m_editor->firstVisibleSourceLine();
+
+            qDebug().noquote()
+                << "[SWITCH] ->RAW after scrollToSourceLine sb="
+                << sb_after
+                << "firstVisibleLine=" << first_line_after
+                << "expected_line=" << source_line;
+
             m_switchingScroll = false;
         });
     }
@@ -564,6 +665,17 @@ void EditorWidget::syncScrollFromEditor()
         return;
     }
 
+    /*
+     * Скрытый в QStackedWidget виджет прокручивать бессмысленно: его
+     * layout не финализирован, а геометрия блоков недостоверна. Это
+     * только портит позицию, на которую опирается инкрементальная
+     * формула прокрутки. Активная сторона синхронизируется при
+     * переключении режима.
+     */
+    if (!m_markdownView->isVisible()) {
+        return;
+    }
+
     const int source_line = m_editor->firstVisibleSourceLine();
 
     m_syncingScroll = true;
@@ -574,6 +686,10 @@ void EditorWidget::syncScrollFromEditor()
 void EditorWidget::syncScrollFromMarkdownView()
 {
     if (m_syncingScroll || m_switchingScroll || m_blockSignals) {
+        return;
+    }
+
+    if (!m_editor->isVisible()) {
         return;
     }
 
