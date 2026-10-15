@@ -22,6 +22,8 @@
 | `MarkdownMathObjects.h` / `MarkdownMathObjects.cpp` | Implements Qt inline text objects for rendered fractions, square roots, and hats. Registers handlers with `QTextDocument` and replaces math marker sequences with inline objects. |
 | `MarkdownCodeBlocks.h` / `MarkdownCodeBlocks.cpp` | Implements code-block support for `MarkdownGraphicsView`: copy buttons, scrollable code editors, placeholder block heights, and code-widget height calculation. |
 | `CodeBlockEditor.h` / `CodeBlockEditor.cpp` | `QPlainTextEdit` used for long code blocks. Handles activation, focus, and routing wheel events between the code editor and preview. |
+| `CodeHighlighter.h` / `CodeHighlighter.cpp` | `QSyntaxHighlighter` for supported languages, backed by `libhighlight`. Tokenizes the whole document with tree-sitter and maps UTF-8 byte offsets to `QString` positions. Used by `CodeEditor` (by file extension) and `CodeBlockEditor` (by fence info string). |
+| `HighlightHtml.h` / `HighlightHtml.cpp` | Renders highlighted code as `<span>` HTML for the preview's `<pre>` blocks, using `highlight::ColorScheme`. |
 | `MarkdownSourceNavigation.cpp` | Implements `MarkdownGraphicsView` source-line anchor construction, scrolling to a source line, and finding the source line at the current preview scroll position. The methods are declared in `MarkdownGraphicsView.h`. |
 | `settings.h` / `settings.cpp` | `Settings` struct (line numbers, word wrap, code-block height limit). Loads and saves settings via `QSettings` INI file. |
 | `settingsdialog.h` / `settingsdialog.cpp` | Modal dialog for editing settings. |
@@ -30,9 +32,9 @@
 
 1. `EditorWidget` parses source Markdown using `MarkdownParser`.
 2. It passes the resulting `MarkdownNode` tree to `MarkdownGraphicsView::setDocument()`.
-3. `MarkdownGraphicsView` asks `MarkdownUtils::blocks_to_html()` to produce HTML and sets it on a `QGraphicsTextItem`.
+3. `MarkdownGraphicsView` asks `MarkdownUtils::blocks_to_html()` to produce HTML and sets it on a `QGraphicsTextItem`. Code blocks with a supported language are highlighted into `<span>`s by `HighlightHtml`.
 4. `MarkdownMathObjects` installs Qt inline objects for math marker sequences in the text document.
-5. The code-block support creates copy buttons and, when configured, scrollable code-editor overlays.
+5. The code-block support creates copy buttons and, when configured, scrollable code-editor overlays (highlighted by `CodeHighlighter`).
 6. `MarkdownSourceNavigation.cpp` maps preview positions to source lines and back.
 
 ### Notes for changes
@@ -41,6 +43,7 @@
 - `MarkdownCodeBlocks.cpp` and `MarkdownSourceNavigation.cpp` define methods declared in `MarkdownGraphicsView.h`; they are separate implementation files, not separate manager classes.
 - `MarkdownMathObjects.h` contains the `Q_OBJECT` declarations for the math object classes. Let Qt `AUTOMOC` process the header. Do not add a manual `#include "*.moc"` for these classes.
 - When adding or moving application source files, update the `PROJECT_SOURCES` list in `CMakeLists.txt`. Do not edit generated files under `build/`; they are recreated by CMake and Qt's build steps.
+- `md_lexer_v2/MarkdownNode.h` carries `language` (the fence info string, e.g. `cpp`). `MarkdownHtmlRenderer` forwards it in `CodeBlockInfo` so both the `<pre>` HTML and `CodeBlockEditor` can pick a grammar.
 
 ---
 
@@ -86,6 +89,48 @@ A standalone library with no Qt dependency that lexes, parses, and renders LaTeX
 
 ---
 
+## `highlight/` — Syntax Highlighting Library
+
+A standalone library with no Qt dependency that tokenizes source code into typed spans using tree-sitter. Built by its own `Makefile` (like `md_lexer_v2`). Integrated grammars: C, C++, Bash, CMake, Make, CSS, GLSL, HTML, JavaScript, JSON, Rust, Zig, XML, and DTD.
+
+`libhighlight.so` is always required by the application, but tree-sitter itself is optional. The Makefile picks the backend at build time:
+
+1. unpacks a `third_party/tree-sitter*.zip|tar.gz` archive if the sources are missing;
+2. uses local `../tree-sitter/tree-sitter*` (headers + `.a` + `queries/highlights.scm`);
+3. falls back to system tree-sitter via `pkg-config`;
+4. otherwise builds `NoopBackend.cpp` — the same API, `available() == false`, empty token lists.
+
+All tree-sitter sources (core and grammars) live under the `tree-sitter/` folder; the core is at `tree-sitter/tree-sitter`, grammars at `tree-sitter/tree-sitter-<lang>`. The XML grammar is doubled: `tree-sitter-xml/xml` (symbol `tree_sitter_xml`) and `tree-sitter-xml/dtd` (symbol `tree_sitter_dtd`), with queries under `tree-sitter-xml/queries/{xml,dtd}/highlights.scm`. The Zig static library is named `libtree-sitter-md_view.a` (a build artifact to be renamed later).
+
+Exactly one of `TreeSitterBackend.cpp` / `NoopBackend.cpp` is compiled, so there are no duplicate symbols and no `#ifdef` in application code. The integrated grammars are linked statically into `libhighlight.so`; `queries/highlights.scm` are embedded via `xxd` (`obj/queries_data.h`). The C++ and GLSL queries carry `; inherits: c` (tree-sitter does not expand `; inherits:`), so the C query is prepended to them at runtime.
+
+Query predicates are evaluated in `TreeSitterBackend.cpp`: `#match?`, `#lua-match?`, `#eq?`, and `#any-of?`, including their `not-...` negated forms and multiple predicates per capture. `#is?`/`#is-not?` (locals) are not supported — locals are not tracked, so those predicates do not restrict highlighting.
+
+| File | Purpose |
+|------|---------|
+| `highlight.h` | Public API: `Language`, `Token`, `Highlighter`. `language_from_extension()`, `language_from_file_name()` and `language_from_name()` map file extensions, file names (including `Makefile` and `CMakeLists.txt`) and fence info strings to `Language`. |
+| `highlight.cpp` | Dispatcher: picks the tree-sitter backend or the no-op fallback; owns the extension/name mapping tables. |
+| `backend.h` | Internal seam declaring `make_tree_sitter_highlighter()` / `tree_sitter_backend_available()`. |
+| `TreeSitterBackend.cpp` | Real implementation: declares one `tree_sitter_<lang>()` per grammar, concatenates queries as needed, parses with tree-sitter, runs the highlight queries, evaluates predicates, and resolves overlapping captures. |
+| `NoopBackend.cpp` | Fallback implementation used when tree-sitter is unavailable. |
+| `ColorScheme.h` / `ColorScheme.cpp` | Maps token types to `TokenStyle` (packed `0xRRGGBB`, bold/italic/underline). Shared by all languages; `style_for()` falls back from a composite type to its parent (`string.special.key → string.special → string`). `default_light()` is the current scheme; loading/editing it from the GUI is a separate task. |
+| `main.cpp` | CLI test harness: prints tokens for a source file. |
+
+### When to open which file
+
+- **Changing how tokens are classified** → `TreeSitterBackend.cpp` (capture resolution) or the `queries/*.scm` files.
+- **Adding a supported language** → `highlight.h` (`Language`), `highlight.cpp` (`language_from_*`), `TreeSitterBackend.cpp` (`extern "C"` grammar symbol, query text, `switch` case), and the `Makefile` (`TS_<LANG>_DIR`, `TS_LOCAL_LIBS_OK`, `TS_LOCAL_QUERIES_OK`, `TS_QUERY`, `TS_LINK`, `obj/queries_data.h`). CMakeLists.txt and Makefile-family files must be detected by `language_from_file_name()`, since their suffixes do not indicate the grammar.
+- **Changing colors** → `ColorScheme.cpp` (single shared scheme for all languages).
+- **Changing build/auto-unpack behavior** → `Makefile`.
+
+### Notes for changes
+
+- The application never links tree-sitter directly; it only includes `highlight/*.h` and links `libhighlight.so`. Keep `highlight.h` free of tree-sitter types.
+- Byte offsets from tree-sitter are UTF-8; Qt positions are UTF-16. `CodeHighlighter` converts between them — do not use raw offsets on `QTextCursor`/`QSyntaxHighlighter`.
+- `highlight/` has no `Makefile` subdirectory recursion and is not listed in `PROJECT_SOURCES`; only its headers are visible to the app via `HIGHLIGHT_DIR`.
+
+---
+
 ## Integration Points
 
 ```text
@@ -102,13 +147,18 @@ MarkdownGraphicsView.cpp
 MarkdownHtmlRenderer.cpp
   ├─ converts MarkdownNode trees to HTML
   ├─ calls math_ast::render_inline_formula()       [Tex_AST_v2]
-  └─ calls math_ast::render_block_formula()        [Tex_AST_v2]
+  ├─ calls math_ast::render_block_formula()        [Tex_AST_v2]
+  └─ calls highlight_code_html()                   [highlight]
 
 MarkdownMathObjects.cpp
   └─ turns math marker sequences in QTextDocument into Qt inline objects
 
 MarkdownCodeBlocks.cpp
   └─ creates copy buttons and scrollable code-block overlays
+
+CodeHighlighter.cpp
+  └─ tokenizes with highlight::Highlighter         [highlight]
+  └─ used by CodeEditor (source) and CodeBlockEditor (preview)
 
 MarkdownSourceNavigation.cpp
   └─ maps source lines to preview positions and preview scroll to source lines

@@ -1,6 +1,7 @@
 #ifndef MARKDOWN_GRAPHICS_VIEW_H
 #define MARKDOWN_GRAPHICS_VIEW_H
 
+#include "MarkdownHtmlRenderer.h"
 #include "MarkdownNode.h"
 
 #include <QFont>
@@ -78,13 +79,13 @@ private:
     void rebuildSourceAnchors() const;
 
     void createCopyButtons(
-        const std::vector<QString>& codes);
+        const std::vector<MarkdownUtils::CodeBlockInfo>& codes);
 
     void createScrollableCodeBlocks(
-        const std::vector<QString>& codes);
+        const std::vector<MarkdownUtils::CodeBlockInfo>& codes);
 
     void applyCodeBlockHeights(
-        const std::vector<QString>& codes);
+        const std::vector<MarkdownUtils::CodeBlockInfo>& codes);
 
     int code_block_max_lines_ = 0; // 0 = без ограничения
 

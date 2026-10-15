@@ -86,6 +86,42 @@ set_target_properties(Tex_AST_v2 PROPERTIES
 
 
 # ============================================================
+# Code highlight library
+#
+# libhighlight.so всегда обязательна. Внутри неё tree-sitter может
+# отсутствовать: тогда она собирается с заглушкой, а приложение всё
+# равно линкуется и работает (без подсветки).
+# ============================================================
+
+set(HIGHLIGHT_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/highlight"
+)
+
+set(HIGHLIGHT_LIBRARY
+    "${HIGHLIGHT_DIR}/libhighlight.so"
+)
+
+if(NOT EXISTS "${HIGHLIGHT_LIBRARY}")
+    message(FATAL_ERROR
+        "Library libhighlight.so was not found:\n"
+        "  ${HIGHLIGHT_LIBRARY}\n"
+        "Build highlight first."
+    )
+endif()
+
+add_library(highlight SHARED IMPORTED)
+
+set_target_properties(highlight PROPERTIES
+    IMPORTED_LOCATION
+        "${HIGHLIGHT_LIBRARY}"
+
+    INTERFACE_INCLUDE_DIRECTORIES
+        "${HIGHLIGHT_DIR}"
+)
+
+
+
+# ============================================================
 # Application sources
 # ============================================================
 
@@ -115,6 +151,12 @@ set(PROJECT_SOURCES
 
     CodeBlockEditor.cpp
     CodeBlockEditor.h
+
+    CodeHighlighter.cpp
+    CodeHighlighter.h
+
+    HighlightHtml.cpp
+    HighlightHtml.h
 
     settings.cpp
     settings.h
@@ -168,6 +210,7 @@ target_include_directories(md_view
         "${CMAKE_CURRENT_SOURCE_DIR}"
         "${MD_LEXER_DIR}"
         "${TEX_AST_DIR}"
+        "${HIGHLIGHT_DIR}"
 )
 
 
@@ -180,6 +223,7 @@ target_link_libraries(md_view
         Qt${QT_VERSION_MAJOR}::Widgets
         md_lexer_v2
         Tex_AST_v2
+        highlight
 )
 
 
@@ -189,10 +233,10 @@ target_link_libraries(md_view
 
 set_target_properties(md_view PROPERTIES
     BUILD_RPATH
-        "${MD_LEXER_DIR};${TEX_AST_DIR}"
+        "${MD_LEXER_DIR};${TEX_AST_DIR};${HIGHLIGHT_DIR}"
 
     INSTALL_RPATH
-        "$ORIGIN/../md_lexer_v2;$ORIGIN/../Tex_AST_v2"
+        "$ORIGIN/../md_lexer_v2;$ORIGIN/../Tex_AST_v2;$ORIGIN/../highlight"
 
     MACOSX_BUNDLE_GUI_IDENTIFIER
         my.example.com

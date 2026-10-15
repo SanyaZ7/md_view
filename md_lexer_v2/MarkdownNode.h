@@ -45,6 +45,12 @@ struct MarkdownNode {
     bool is_header = false;
 
     /*
+     * Info string блока кода (```cpp -> "cpp"). Пустая строка
+     * означает, что язык не задан.
+     */
+    std::string language;
+
+    /*
      * Номера строк исходного Markdown.
      *
      * Значения задаются парсером для блочных узлов.

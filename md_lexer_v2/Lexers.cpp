@@ -943,6 +943,12 @@ LexerResult CodeBlockLexer::try_consume(
         ? NodeType::FencedMarkdown
         : NodeType::CodeBlock;
 
+    /*
+     * Info string сохраняется как язык блока: подсветка кода
+     * определяет по нему грамматику (```cpp, ```c).
+     */
+    node.language = info_string;
+
     node.content = std::move(content);
 
     return {

@@ -6,12 +6,15 @@
 #include <QtGlobal>
 #include "settings.h"
 
+#include <memory>
+
 class QContextMenuEvent;
 class QPaintEvent;
 class QResizeEvent;
 class QStackedWidget;
 class QShowEvent;
 class MarkdownGraphicsView;
+class CodeHighlighter;
 
 // ============================================================
 // CodeEditor
@@ -58,6 +61,16 @@ private:
     void showEvent(QShowEvent *event) override;
     QString m_filePath;
     bool m_renderMd = false;
+
+    /*
+     * Владелец — документ редактора (QSyntaxHighlighter удаляется
+     * вместе с QTextDocument).
+     */
+    CodeHighlighter *m_highlighter = nullptr;
+
+    /* Подсветка включается только для исходников C/C++. */
+    void updateHighlighterForFile();
+    bool m_refreshingHighlighter = false;
 };
 
 // ============================================================

@@ -122,7 +122,7 @@ void MarkdownGraphicsView::render_document()
             QDesktopServices::openUrl(QUrl(link));
         });
 
-    std::vector<QString> code_list;
+    std::vector<MarkdownUtils::CodeBlockInfo> code_list;
 
     MarkdownUtils::RenderOptions render_options;
     render_options.codeBlockMaxLines = code_block_max_lines_;

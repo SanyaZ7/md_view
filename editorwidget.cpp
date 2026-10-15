@@ -1,7 +1,9 @@
 #include "editorwidget.h"
 #include "MarkdownGraphicsView.h"
 
+#include "CodeHighlighter.h"
 #include "MarkdownParser.h"
+#include "highlight.h"
 #include <QShowEvent>
 #include <QAction>
 #include <QContextMenuEvent>
@@ -48,6 +50,39 @@ CodeEditor::CodeEditor(QWidget *parent)
 
     m_lineNumberArea->hide();
     setViewportMargins(0, 0, 0, 0);
+
+    m_highlighter = new CodeHighlighter(document());
+
+    /*
+     * Форматирование подсветки не меняет текст, поэтому textChanged
+     * здесь не приходит и повторный рендеринг Markdown не запускается.
+     */
+    connect(this, &QPlainTextEdit::textChanged,
+            this,
+            [this]() {
+                if (!m_highlighter || m_refreshingHighlighter) {
+                    return;
+                }
+
+                m_refreshingHighlighter = true;
+                m_highlighter->refresh();
+                m_refreshingHighlighter = false;
+            });
+}
+
+void CodeEditor::updateHighlighterForFile()
+{
+    if (!m_highlighter) {
+        return;
+    }
+
+    const QFileInfo info(m_filePath);
+
+    const highlight::Language language =
+        highlight::language_from_file_name(
+            info.fileName().toStdString());
+
+    m_highlighter->setLanguage(language);
 }
 
 void CodeEditor::resizeEvent(QResizeEvent *event)
@@ -242,6 +277,8 @@ void CodeEditor::setLineNumberAreaVisible(bool visible)
 void CodeEditor::setFilePath(const QString &filePath)
 {
     m_filePath = filePath;
+
+    updateHighlighterForFile();
 }
 
 int CodeEditor::firstVisibleSourceLine() const

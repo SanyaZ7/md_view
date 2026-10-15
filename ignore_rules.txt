@@ -3,6 +3,9 @@ obj
 build/
 *.a
 tree
+tree-sitter/
+tree-sitter-c/
+tree-sitter-cpp/
 *.cpp2
 *.hpp2
 context.make
