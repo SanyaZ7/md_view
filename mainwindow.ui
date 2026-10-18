@@ -53,8 +53,32 @@
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuView"/>
+   <addaction name="actionUndo"/>
+   <addaction name="actionRedo"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionUndo">
+   <property name="text">
+    <string>↶ 0</string>
+   </property>
+   <property name="toolTip">
+    <string>Отменить действие</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Z</string>
+   </property>
+  </action>
+  <action name="actionRedo">
+   <property name="text">
+    <string>↷ 0</string>
+   </property>
+   <property name="toolTip">
+    <string>Повторить действие</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+Z</string>
+   </property>
+  </action>
   <action name="actionOpen">
    <property name="text">
     <string>Открыть</string>

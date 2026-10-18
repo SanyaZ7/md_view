@@ -42,6 +42,9 @@ private slots:
     void saveCurrentTab();
     void saveAllTabs();
     void onEditorTextChanged();
+    void undoCurrentTab();
+    void redoCurrentTab();
+    void updateUndoRedoActions();
 
 private:
     void addTab(const QString &filePath, bool renderMode = false);

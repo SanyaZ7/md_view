@@ -2,8 +2,7 @@
 #include "settingsdialog.h"
 #include "editorwidget.h"       // новый заголовок
 #include "highlight.h"
-//#include "./ui_mainwindow.h"
-#include "/home/alex/workspace/md_view/build/Release_min_size/md_view_autogen/include/ui_mainwindow.h"
+#include "ui_mainwindow.h"
 
 #include <QTabWidget>
 #include <QFileDialog>
@@ -17,6 +16,8 @@
 #include <QDropEvent>
 #include <QMimeData>
 #include <QUrl>
+#include <QTextDocument>
+#include <QTextCursor>
 
 namespace {
 
@@ -71,6 +72,13 @@ MainWindow::MainWindow(QWidget *parent)
             this, &MainWindow::closeTab);
     connect(ui->tabWidget, &QTabWidget::currentChanged,
             this, &MainWindow::updateStatusBar);
+    connect(ui->tabWidget, &QTabWidget::currentChanged,
+            this, &MainWindow::updateUndoRedoActions);
+
+    connect(ui->actionUndo, &QAction::triggered,
+            this, &MainWindow::undoCurrentTab);
+    connect(ui->actionRedo, &QAction::triggered,
+            this, &MainWindow::redoCurrentTab);
 
     connect(ui->actionOpen, &QAction::triggered,
             this, &MainWindow::openFile);
@@ -260,8 +268,13 @@ void MainWindow::addTab(const QString &filePath, bool renderMode)
 
     connect(editor, &EditorWidget::textChangedFlag,
             this, &MainWindow::onEditorTextChanged);
+    connect(editor->editor()->document(), &QTextDocument::undoAvailable,
+            this, &MainWindow::updateUndoRedoActions);
+    connect(editor->editor()->document(), &QTextDocument::redoAvailable,
+            this, &MainWindow::updateUndoRedoActions);
 
     updateStatusBar();
+    updateUndoRedoActions();
 }
 
 void MainWindow::closeTab(int index)
@@ -310,6 +323,7 @@ void MainWindow::closeTab(int index)
     delete widget;
 
     updateStatusBar();
+    updateUndoRedoActions();
 }
 
 void MainWindow::showSettings()
@@ -395,6 +409,39 @@ void MainWindow::onEditorTextChanged()
         index,
         editor->editor()->document()->isModified()
     );
+    updateUndoRedoActions();
+}
+
+void MainWindow::undoCurrentTab()
+{
+    EditorWidget *editor = qobject_cast<EditorWidget *>(
+        ui->tabWidget->currentWidget());
+    if (editor) {
+        editor->editor()->undo();
+    }
+}
+
+void MainWindow::redoCurrentTab()
+{
+    EditorWidget *editor = qobject_cast<EditorWidget *>(
+        ui->tabWidget->currentWidget());
+    if (editor) {
+        editor->editor()->redo();
+    }
+}
+
+void MainWindow::updateUndoRedoActions()
+{
+    EditorWidget *editor = qobject_cast<EditorWidget *>(
+        ui->tabWidget->currentWidget());
+    const QTextDocument *document = editor ? editor->editor()->document() : nullptr;
+    const int undoSteps = document ? document->availableUndoSteps() : 0;
+    const int redoSteps = document ? document->availableRedoSteps() : 0;
+
+    ui->actionUndo->setText(QString::fromUtf8("↶ %1").arg(undoSteps));
+    ui->actionRedo->setText(QString::fromUtf8("↷ %1").arg(redoSteps));
+    ui->actionUndo->setEnabled(undoSteps > 0);
+    ui->actionRedo->setEnabled(redoSteps > 0);
 }
 
 // Метод для обновления заголовка вкладки
