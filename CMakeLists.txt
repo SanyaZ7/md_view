@@ -132,6 +132,10 @@ set(PROJECT_SOURCES
     mainwindow.h
     mainwindow.ui
 
+    SearchPanel.cpp
+    SearchPanel.h
+    SearchPanel.ui
+
     editorwidget.cpp
     editorwidget.h
 

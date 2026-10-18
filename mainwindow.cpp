@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "settingsdialog.h"
 #include "editorwidget.h"       // новый заголовок
+#include "SearchPanel.h"
 #include "highlight.h"
 #include "ui_mainwindow.h"
 
@@ -18,6 +19,9 @@
 #include <QUrl>
 #include <QTextDocument>
 #include <QTextCursor>
+#include <QDockWidget>
+#include <QAction>
+#include <QKeySequence>
 
 namespace {
 
@@ -62,6 +66,26 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
+    m_searchDock = new QDockWidget(tr("Поиск"), this);
+    m_searchDock->setObjectName("searchDock");
+    m_searchDock->setAllowedAreas(Qt::BottomDockWidgetArea |
+                                  Qt::RightDockWidgetArea);
+    m_searchDock->setFeatures(QDockWidget::DockWidgetMovable |
+                              QDockWidget::DockWidgetFloatable |
+                              QDockWidget::DockWidgetClosable);
+    m_searchDock->setMinimumSize(220, 80);
+    m_searchDock->setWidget(new SearchPanel(m_searchDock));
+    addDockWidget(Qt::BottomDockWidgetArea, m_searchDock);
+    m_searchDock->hide();
+
+    m_toggleSearchAction = new QAction(tr("Поиск"), this);
+    m_toggleSearchAction->setShortcut(QKeySequence::Find);
+    m_toggleSearchAction->setShortcutContext(Qt::WindowShortcut);
+    addAction(m_toggleSearchAction);
+    ui->menuView->addAction(m_toggleSearchAction);
+    connect(m_toggleSearchAction, &QAction::triggered,
+            this, &MainWindow::toggleSearchPanel);
+
     ui->tabWidget->setTabsClosable(true);
     ui->tabWidget->setMovable(true);
     m_settings = loadSettings();
@@ -74,6 +98,15 @@ MainWindow::MainWindow(QWidget *parent)
             this, &MainWindow::updateStatusBar);
     connect(ui->tabWidget, &QTabWidget::currentChanged,
             this, &MainWindow::updateUndoRedoActions);
+    connect(ui->tabWidget, &QTabWidget::currentChanged,
+            this, [this](int) {
+        if (m_searchDock->isVisible()) {
+            SearchPanel *panel = qobject_cast<SearchPanel *>(m_searchDock->widget());
+            EditorWidget *editor = qobject_cast<EditorWidget *>(
+                ui->tabWidget->currentWidget());
+            panel->setEditor(editor ? editor->editor() : nullptr);
+        }
+    });
 
     connect(ui->actionUndo, &QAction::triggered,
             this, &MainWindow::undoCurrentTab);
@@ -93,6 +126,19 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::toggleSearchPanel()
+{
+    const bool show = !m_searchDock->isVisible();
+    m_searchDock->setVisible(show);
+    if (show) {
+        EditorWidget *editor = qobject_cast<EditorWidget *>(
+            ui->tabWidget->currentWidget());
+        SearchPanel *panel = qobject_cast<SearchPanel *>(m_searchDock->widget());
+        panel->setEditor(editor ? editor->editor() : nullptr);
+        panel->focusInput();
+    }
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)

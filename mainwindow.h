@@ -7,6 +7,8 @@
 class QDragEnterEvent;
 class QDropEvent;
 class QCloseEvent;
+class QDockWidget;
+class QAction;
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -45,6 +47,7 @@ private slots:
     void undoCurrentTab();
     void redoCurrentTab();
     void updateUndoRedoActions();
+    void toggleSearchPanel();
 
 private:
     void addTab(const QString &filePath, bool renderMode = false);
@@ -57,6 +60,8 @@ private:
 
     Ui::MainWindow *ui;
     Settings m_settings;
+    QDockWidget *m_searchDock = nullptr;
+    QAction *m_toggleSearchAction = nullptr;
 };
 
 #endif // MAINWINDOW_H

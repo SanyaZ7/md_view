@@ -27,6 +27,7 @@
 | `MarkdownSourceNavigation.cpp` | Implements `MarkdownGraphicsView` source-line anchor construction, scrolling to a source line, and finding the source line at the current preview scroll position. The methods are declared in `MarkdownGraphicsView.h`. |
 | `settings.h` / `settings.cpp` | `Settings` struct (line numbers, word wrap, code-block height limit). Loads and saves settings via `QSettings` INI file. |
 | `settingsdialog.h` / `settingsdialog.cpp` | Modal dialog for editing settings. |
+| `SearchPanel.h` / `SearchPanel.cpp` / `SearchPanel.ui` | Find panel shown in a `QDockWidget` (toggled by `Ctrl+F` from `MainWindow`). Multi-level fuzzy search over the source `QPlainTextEdit`: exact, case-folded, whitespace-equivalent, lookalike Cyrillic↔Latin, dash-equivalent, and full dash-as-space normalization. Results are grouped by the strictest matching level in a `QListWidget` and highlighted in the editor via `QTextEdit::ExtraSelection`. `setEditor()` rebinds the panel to the active tab's editor. |
 
 ### Rendering flow
 
