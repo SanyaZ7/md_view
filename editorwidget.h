@@ -32,6 +32,7 @@ public:
     void setLineNumberAreaVisible(bool visible);
     void setFilePath(const QString &filePath);
     void setRenderMode(bool enabled);
+    void setDropFilesAsPaths(bool enabled);
 
     /*
      * Навигация по исходным строкам (нумерация с нуля).
@@ -50,6 +51,8 @@ signals:
 protected:
     void resizeEvent(QResizeEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
 private slots:
     void updateLineNumberAreaRect(const QRect &rect, int dy);
@@ -71,6 +74,9 @@ private:
     /* Подсветка включается только для исходников C/C++. */
     void updateHighlighterForFile();
     bool m_refreshingHighlighter = false;
+
+    /* Если true — файлы при drop вставляются как текст путей. */
+    bool m_dropFilesAsPaths = false;
 };
 
 // ============================================================

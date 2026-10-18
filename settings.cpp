@@ -21,6 +21,8 @@ Settings loadSettings()
 
     s.limitCodeBlockHeight = ini.value("view/limitCodeBlockHeight", false).toBool();
     s.codeBlockMaxLines    = qMax(8, ini.value("view/codeBlockMaxLines", 20).toInt());
+
+    s.dropFilesAsPaths   = ini.value("view/dropFilesAsPaths", false).toBool();
     return s;
 }
 
@@ -33,5 +35,7 @@ void saveSettings(const Settings &s)
 
     ini.setValue("view/limitCodeBlockHeight", s.limitCodeBlockHeight);
     ini.setValue("view/codeBlockMaxLines",    qMax(8, s.codeBlockMaxLines));
+
+    ini.setValue("view/dropFilesAsPaths", s.dropFilesAsPaths);
     ini.sync();
 }

@@ -4,6 +4,8 @@
 #include <QMainWindow>
 #include "settings.h"
 
+class QDragEnterEvent;
+class QDropEvent;
 class QCloseEvent;
 
 QT_BEGIN_NAMESPACE
@@ -25,8 +27,13 @@ public:
         return m_settings;
     }
 
+    // Открывает файл сразу в режиме рендеринга (для запуска с аргументом-файлом).
+    void openFileInRenderMode(const QString &filePath);
+
 protected:
     void closeEvent(QCloseEvent *event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
 private slots:
     void openFile();
@@ -37,7 +44,9 @@ private slots:
     void onEditorTextChanged();
 
 private:
-    void addTab(const QString &filePath);
+    void addTab(const QString &filePath, bool renderMode = false);
+    // Индекс вкладки с этим файлом или -1, если не открыт.
+    int findTabForFile(const QString &filePath) const;
     void updateStatusBar();
     void applySettingsToAllTabs();
     void updateTabTitle(int index, bool modified);

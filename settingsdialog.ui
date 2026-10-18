@@ -102,6 +102,13 @@
     </layout>
    </item>
    <item>
+    <widget class="QCheckBox" name="chkDropFilesAsPaths">
+     <property name="text">
+      <string>Перетаскивать файлы как пути</string>
+     </property>
+    </widget>
+   </item>
+   <item>
     <spacer name="verticalSpacer">
      <property name="orientation">
       <enum>Qt::Vertical</enum>

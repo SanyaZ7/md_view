@@ -18,6 +18,10 @@
 #include <QTextCursor>
 #include <QAbstractTextDocumentLayout>
 #include <QDebug>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
 
 // ============================================================
 // LineNumberArea
@@ -545,6 +549,8 @@ void EditorWidget::applySettings(const Settings &settings)
     m_markdownView->setCodeBlockMaxLines(
         settings.limitCodeBlockHeight ? qMax(8, settings.codeBlockMaxLines) : 0);
 
+    m_editor->setDropFilesAsPaths(settings.dropFilesAsPaths);
+
     // Настройка влияет на отрисовку блоков кода — перерисовываем.
     if (m_renderMd) {
         updateMarkdownView();
@@ -554,6 +560,59 @@ void EditorWidget::applySettings(const Settings &settings)
 void CodeEditor::setRenderMode(bool enabled)
 {
     m_renderMd = enabled;
+}
+
+void CodeEditor::setDropFilesAsPaths(bool enabled)
+{
+    m_dropFilesAsPaths = enabled;
+
+    /*
+     * Встроенный DnD QPlainTextEdit вставляет содержимое файлов сам.
+     * Когда режим «пути как текст» выключен, полностью отключаем приём
+     * drop'ов: событие не обрабатывается редактором и всплывает до
+     * MainWindow, который откроет файлы в новых вкладках.
+     */
+    setAcceptDrops(enabled);
+}
+
+void CodeEditor::dragEnterEvent(QDragEnterEvent *event)
+{
+    /*
+     * В режиме «файлы как пути» принимаем drop сами (вставим текст).
+     * Иначе игнорируем — событие всплывёт до MainWindow, который
+     * откроет файлы в новых вкладках.
+     */
+    if (m_dropFilesAsPaths &&
+        event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+        return;
+    }
+
+    event->ignore();
+}
+
+void CodeEditor::dropEvent(QDropEvent *event)
+{
+    if (!m_dropFilesAsPaths || !event->mimeData()->hasUrls()) {
+        event->ignore();
+        return;
+    }
+
+    QStringList paths;
+    for (const QUrl &url : event->mimeData()->urls()) {
+        const QString local = url.toLocalFile();
+        if (!local.isEmpty()) {
+            paths << local;
+        }
+    }
+
+    if (paths.isEmpty()) {
+        event->ignore();
+        return;
+    }
+
+    textCursor().insertText(paths.join(QLatin1Char('\n')));
+    event->acceptProposedAction();
 }
 
 void EditorWidget::setRenderMode(bool enabled)

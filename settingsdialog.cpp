@@ -33,6 +33,8 @@ void SettingsDialog::loadFromSettings(const Settings &s)
 
     ui->chkLimitCodeBlockHeight->setChecked(s.limitCodeBlockHeight);
     ui->spinCodeBlockMaxLines->setValue(qMax(8, s.codeBlockMaxLines));
+
+    ui->chkDropFilesAsPaths->setChecked(s.dropFilesAsPaths);
 }
 
 void SettingsDialog::saveToSettings(Settings &s) const
@@ -42,6 +44,8 @@ void SettingsDialog::saveToSettings(Settings &s) const
 
     s.limitCodeBlockHeight = ui->chkLimitCodeBlockHeight->isChecked();
     s.codeBlockMaxLines    = qMax(8, ui->spinCodeBlockMaxLines->value());
+
+    s.dropFilesAsPaths   = ui->chkDropFilesAsPaths->isChecked();
 }
 
 void SettingsDialog::updateCodeBlockLinesVisibility()

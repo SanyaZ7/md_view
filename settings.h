@@ -10,6 +10,8 @@ struct Settings
 
     bool limitCodeBlockHeight = false;
     int  codeBlockMaxLines    = 20;
+
+    bool dropFilesAsPaths   = false;
 };
 
 // Путь к файлу настроек (в папке проекта)

@@ -36,6 +36,13 @@ MarkdownGraphicsView::MarkdownGraphicsView(QWidget* parent)
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setAlignment(Qt::AlignLeft | Qt::AlignTop);
     setBackgroundBrush(palette().brush(QPalette::Base));
+
+    /*
+     * QGraphicsView по умолчанию принимает drop и обрабатывает его сам.
+     * Отключаем, чтобы в режиме отрисовки перетаскивание файлов всплывало
+     * до MainWindow и открывало их в новых вкладках.
+     */
+    setAcceptDrops(false);
 }
 
 void MarkdownGraphicsView::setDocument(

@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "settingsdialog.h"
 #include "editorwidget.h"       // новый заголовок
+#include "highlight.h"
 //#include "./ui_mainwindow.h"
 #include "/home/alex/workspace/md_view/build/Release_min_size/md_view_autogen/include/ui_mainwindow.h"
 
@@ -12,6 +13,47 @@
 #include <QMessageBox>
 #include <QByteArray>
 #include <QCloseEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
+
+namespace {
+
+/*
+ * Категория файла по его имени для обработки перетаскивания.
+ * Расширения, которые распознаёт подсветка (tree-sitter), считаются
+ * текстовыми; .md — рендеринг; .txt — текст; всё остальное — неизвестное.
+ */
+enum class DropKind {
+    Markdown,
+    PlainText,
+    Unknown
+};
+
+DropKind classifyDroppedFile(const QString &filePath)
+{
+    const QFileInfo info(filePath);
+    const QString suffix = info.suffix().toLower();
+
+    if (suffix == "md" || suffix == "markdown") {
+        return DropKind::Markdown;
+    }
+
+    if (suffix == "txt") {
+        return DropKind::PlainText;
+    }
+
+    // Файлы, для которых есть подсветка (Makefile, CMakeLists.txt и т.д.).
+    if (highlight::language_from_file_name(
+            info.fileName().toStdString()) != highlight::Language::None) {
+        return DropKind::PlainText;
+    }
+
+    return DropKind::Unknown;
+}
+
+} // namespace
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -22,6 +64,8 @@ MainWindow::MainWindow(QWidget *parent)
     ui->tabWidget->setTabsClosable(true);
     ui->tabWidget->setMovable(true);
     m_settings = loadSettings();
+
+    setAcceptDrops(true);
 
     connect(ui->tabWidget, &QTabWidget::tabCloseRequested,
             this, &MainWindow::closeTab);
@@ -43,6 +87,70 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void MainWindow::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    }
+}
+
+void MainWindow::dropEvent(QDropEvent *event)
+{
+    if (!event->mimeData()->hasUrls()) {
+        return;
+    }
+
+    for (const QUrl &url : event->mimeData()->urls()) {
+        QString filePath = url.toLocalFile();
+        if (filePath.isEmpty()) {
+            continue;
+        }
+
+        DropKind kind = classifyDroppedFile(filePath);
+
+        if (kind == DropKind::Unknown) {
+            auto answer = QMessageBox::question(
+                this,
+                "Неизвестный файл",
+                QString(
+                    "Не удаётся определить тип файла «%1».\n"
+                    "Всё равно открыть?"
+                ).arg(QFileInfo(filePath).fileName()),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No
+            );
+            if (answer != QMessageBox::Yes) {
+                continue;
+            }
+            addTab(filePath, false);
+        } else {
+            addTab(filePath, kind == DropKind::Markdown);
+        }
+    }
+
+    event->acceptProposedAction();
+}
+
+int MainWindow::findTabForFile(const QString &filePath) const
+{
+    const QString canonical =
+        QFileInfo(filePath).canonicalFilePath();
+
+    for (int i = 0; i < ui->tabWidget->count(); ++i) {
+        EditorWidget *editor =
+            qobject_cast<EditorWidget*>(
+                ui->tabWidget->widget(i));
+
+        if (editor &&
+            QFileInfo(editor->filePath())
+                .canonicalFilePath() == canonical) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
 void MainWindow::openFile()
 {
     QString filePath = QFileDialog::getOpenFileName(
@@ -62,8 +170,46 @@ void MainWindow::openFile()
     addTab(filePath);
 }
 
-void MainWindow::addTab(const QString &filePath)
+void MainWindow::openFileInRenderMode(const QString &filePath)
 {
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    // Файл уже открыт — просто переключаемся на него в режиме рендеринга.
+    for (int i = 0; i < ui->tabWidget->count(); ++i) {
+        EditorWidget *widget = qobject_cast<EditorWidget*>(ui->tabWidget->widget(i));
+        if (widget && widget->filePath() == filePath) {
+            ui->tabWidget->setCurrentIndex(i);
+            widget->setRenderMode(true);
+            return;
+        }
+    }
+
+    addTab(filePath, true);
+}
+
+void MainWindow::addTab(const QString &filePath, bool renderMode)
+{
+    /*
+     * Если файл уже открыт — переключаемся на вкладку.
+     * При этом синхронизируем режим: если файл был открыт в raw,
+     * а запросили render — переключаем.
+     */
+    int existing = findTabForFile(filePath);
+    if (existing >= 0) {
+        EditorWidget *editor =
+            qobject_cast<EditorWidget*>(
+                ui->tabWidget->widget(existing));
+        if (editor) {
+            if (renderMode && !editor->renderMode()) {
+                editor->setRenderMode(true);
+            }
+            ui->tabWidget->setCurrentIndex(existing);
+            return;
+        }
+    }
+
     QFile file(filePath);
 
     if (!file.open(
@@ -94,6 +240,10 @@ void MainWindow::addTab(const QString &filePath)
     editor->setPlainText(content);
     editor->setFilePath(filePath);
     editor->applySettings(m_settings);
+
+    if (renderMode) {
+        editor->setRenderMode(true);
+    }
 
     // Загрузка исходного содержимого не является изменением.
     editor->editor()->document()->setModified(false);
