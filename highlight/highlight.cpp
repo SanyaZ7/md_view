@@ -264,6 +264,10 @@ Language language_from_name(const std::string& name)
 
 std::unique_ptr<Highlighter> Highlighter::create(Language language)
 {
+    if (language == Language::Html) {
+        return detail::make_embedded_html_highlighter();
+    }
+
     if (language != Language::None) {
         std::unique_ptr<Highlighter> highlighter =
             detail::make_tree_sitter_highlighter(language);

@@ -158,6 +158,7 @@ set(PROJECT_SOURCES
 
     CodeHighlighter.cpp
     CodeHighlighter.h
+    FontUtils.h
 
     HighlightHtml.cpp
     HighlightHtml.h

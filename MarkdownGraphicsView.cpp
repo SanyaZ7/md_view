@@ -4,6 +4,7 @@
 #include "MarkdownCodeBlocks.h"
 #include "MarkdownHtmlRenderer.h"
 #include "MarkdownMathObjects.h"
+#include "FontUtils.h"
 
 #include <QAction>
 #include <QAbstractTextDocumentLayout>
@@ -23,7 +24,7 @@
 MarkdownGraphicsView::MarkdownGraphicsView(QWidget* parent)
     : QGraphicsView(parent)
     , text_font_(QStringLiteral("Noto Sans"), 12)
-    , code_font_(QStringLiteral("Noto Sans Mono"), 11)
+    , code_font_(make_code_font(11))
     , render_mode_(false)
 {
     // Высота строки моноширинного шрифта для расчёта высоты плейсхолдера.
@@ -144,7 +145,7 @@ void MarkdownGraphicsView::render_document()
             "html, body {"
             " margin:0;"
             " padding:0;"
-            " font-family:'Noto Sans','Noto Color Emoji','Segoe UI Emoji','Apple Color Emoji',sans-serif;"
+            " font-family:'Noto Sans','Noto Color Emoji','Noto Emoji','Symbola','DejaVu Sans','Segoe UI Emoji','Apple Color Emoji',sans-serif;"
             " font-size:12pt;"
             "}"
             "p { margin:0 0 12px 0; }"

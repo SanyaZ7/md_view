@@ -22,7 +22,8 @@
 | `MarkdownMathObjects.h` / `MarkdownMathObjects.cpp` | Implements Qt inline text objects for rendered fractions, square roots, and hats. Registers handlers with `QTextDocument` and replaces math marker sequences with inline objects. |
 | `MarkdownCodeBlocks.h` / `MarkdownCodeBlocks.cpp` | Implements code-block support for `MarkdownGraphicsView`: copy buttons, scrollable code editors, placeholder block heights, and code-widget height calculation. |
 | `CodeBlockEditor.h` / `CodeBlockEditor.cpp` | `QPlainTextEdit` used for long code blocks. Handles activation, focus, and routing wheel events between the code editor and preview. |
-| `CodeHighlighter.h` / `CodeHighlighter.cpp` | `QSyntaxHighlighter` for supported languages, backed by `libhighlight`. Tokenizes the whole document with tree-sitter and maps UTF-8 byte offsets to `QString` positions. Used by `CodeEditor` (by file extension) and `CodeBlockEditor` (by fence info string). |
+| `CodeHighlighter.h` / `CodeHighlighter.cpp` | `QSyntaxHighlighter` for supported languages, backed by `libhighlight`. Tokenizes the whole document with tree-sitter and maps UTF-8 byte offsets to `QString` positions, including UTF-16 surrogate pairs. Explicitly applies `Noto Color Emoji` to emoji code points when available. Used by `CodeEditor` (by file extension) and `CodeBlockEditor` (by fence info string). |
+| `FontUtils.h` | Shared code-font construction. Keeps the monospace editor font and configures Qt 6.8+ fallback families (`Noto Color Emoji`, `Noto Emoji`, `Symbola`, `DejaVu Sans`) while remaining source-compatible with older Qt versions. |
 | `HighlightHtml.h` / `HighlightHtml.cpp` | Renders highlighted code as `<span>` HTML for the preview's `<pre>` blocks, using `highlight::ColorScheme`. |
 | `MarkdownSourceNavigation.cpp` | Implements `MarkdownGraphicsView` source-line anchor construction, scrolling to a source line, and finding the source line at the current preview scroll position. The methods are declared in `MarkdownGraphicsView.h`. |
 | `settings.h` / `settings.cpp` | `Settings` struct (line numbers, word wrap, code-block height limit). Loads and saves settings via `QSettings` INI file. |
@@ -110,9 +111,10 @@ Query predicates are evaluated in `TreeSitterBackend.cpp`: `#match?`, `#lua-matc
 | File | Purpose |
 |------|---------|
 | `highlight.h` | Public API: `Language`, `Token`, `Highlighter`. `language_from_extension()`, `language_from_file_name()` and `language_from_name()` map file extensions, file names (including `Makefile` and `CMakeLists.txt`) and fence info strings to `Language`. |
-| `highlight.cpp` | Dispatcher: picks the tree-sitter backend or the no-op fallback; owns the extension/name mapping tables. |
-| `backend.h` | Internal seam declaring `make_tree_sitter_highlighter()` / `tree_sitter_backend_available()`. |
-| `TreeSitterBackend.cpp` | Real implementation: declares one `tree_sitter_<lang>()` per grammar, concatenates queries as needed, parses with tree-sitter, runs the highlight queries, evaluates predicates, and resolves overlapping captures. |
+| `highlight.cpp` | Dispatcher: picks the tree-sitter backend or the no-op fallback; owns the extension/name mapping tables. HTML is routed to the composite embedded-language highlighter. |
+| `backend.h` | Internal seam declaring `make_tree_sitter_highlighter()`, `make_embedded_html_highlighter()` and `tree_sitter_backend_available()`. |
+| `EmbeddedHtmlHighlighter.h` / `EmbeddedHtmlHighlighter.cpp` | Composite highlighter for HTML documents. Uses the HTML grammar for markup and delegates the contents of `<style>` and `<script>` blocks to CSS and JavaScript highlighters, translating nested UTF-8 byte offsets back to document offsets and giving nested tokens priority over broad HTML text captures. |
+| `TreeSitterBackend.cpp` | Real implementation for one tree-sitter grammar: declares one `tree_sitter_<lang>()` per grammar, concatenates queries as needed, parses with tree-sitter, runs the highlight queries, evaluates predicates, and resolves overlapping captures. |
 | `NoopBackend.cpp` | Fallback implementation used when tree-sitter is unavailable. |
 | `ColorScheme.h` / `ColorScheme.cpp` | Maps token types to `TokenStyle` (packed `0xRRGGBB`, bold/italic/underline). Shared by all languages; `style_for()` falls back from a composite type to its parent (`string.special.key → string.special → string`). `default_light()` is the current scheme; loading/editing it from the GUI is a separate task. |
 | `main.cpp` | CLI test harness: prints tokens for a source file. |
@@ -127,8 +129,9 @@ Query predicates are evaluated in `TreeSitterBackend.cpp`: `#match?`, `#lua-matc
 ### Notes for changes
 
 - The application never links tree-sitter directly; it only includes `highlight/*.h` and links `libhighlight.so`. Keep `highlight.h` free of tree-sitter types.
-- Byte offsets from tree-sitter are UTF-8; Qt positions are UTF-16. `CodeHighlighter` converts between them — do not use raw offsets on `QTextCursor`/`QSyntaxHighlighter`.
-- `highlight/` has no `Makefile` subdirectory recursion and is not listed in `PROJECT_SOURCES`; only its headers are visible to the app via `HIGHLIGHT_DIR`.
+- Byte offsets from tree-sitter are UTF-8; Qt positions are UTF-16. `CodeHighlighter` converts between them, including surrogate pairs, and explicitly applies the emoji font to emoji code points — do not use raw offsets on `QTextCursor`/`QSyntaxHighlighter`.
+- `EmbeddedHtmlHighlighter` works entirely inside `libhighlight` and must not be moved into the Qt adapter: both preview HTML generation and the CLI highlighter use the same composite behavior.
+- `highlight/` has no `Makefile` subdirectory recursion and is not listed in `PROJECT_SOURCES`; its `.cpp` files are collected by the local wildcard-based Makefile. Only headers used by the application need to be visible through `HIGHLIGHT_DIR`.
 
 ---
 

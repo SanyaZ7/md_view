@@ -2,6 +2,7 @@
 #include "MarkdownGraphicsView.h"
 
 #include "CodeHighlighter.h"
+#include "FontUtils.h"
 #include "MarkdownParser.h"
 #include "highlight.h"
 #include <QShowEvent>
@@ -54,6 +55,8 @@ CodeEditor::CodeEditor(QWidget *parent)
 
     m_lineNumberArea->hide();
     setViewportMargins(0, 0, 0, 0);
+
+    setFont(make_code_font());
 
     m_highlighter = new CodeHighlighter(document());
 
