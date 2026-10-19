@@ -1,11 +1,113 @@
-Проект представляет собой простой Qt6/C++ редактор с возможностью рендеринга md файлов и математических формул. В отличие от программы MarkText не сбивается когда языковая модель путает разметку, а отображает содержимое. Отображение формул в целом корректное, но встречаются небольшие
-огрехи отображения формул иногда. Рендеринг включается в контексном меню правой кнопки мыши. Основное преимущество - малый размер, 253 килобайта базовая оптимизированная компилятором по размеру версия. То есть как бы небольшая альтернатива тайпскрипт стеку, размер приложений которых 
-начинается от 100 МБ. Проект был начат из-за плохой ситуации с GUI под языковые модели в С++ да и в целом в компилируемых языках типа rust и zig. Сначала нужно собрать 3 библиотеки - Tex_AST_v2, md_lexer_v2 и highlight через make; потом основное приложений через cmake или из QtCreator. Библиотека highlight даёт подсветку C/C++, Bash, CMake, Make, CSS, GLSL, HTML, JavaScript, JSON, Rust, Zig, XML и DTD и собирается даже без tree-sitter — в этом случае она работает как заглушка, а приложение собирается и запускается без подсветки.
-В написании использовались gpt-5.6-luna; gpt-6-luna; deepseek-v4.1-flash; редактор koda (https://kodacode.ru/, koda-base модель). А также совсем немного: deepseek-v4-pro; gpt-5.6-terra; laguna-xs-2.1.
 
-This project is a simple Qt6/C++ editor with Markdown and mathematical formula rendering capabilities. Unlike MarkText, it does not break when a language model produces malformed markup, but instead continues to display the content. 
-Formula rendering is generally accurate, though occasional minor glitches may occur. Rendering is enabled via the right-click context menu. The main advantage is its small footprint: the base version, optimized for size by the compiler, is only 253 KB. 
-It serves as a lightweight alternative to the TypeScript stack, where application sizes typically start at 100 MB. The project was initiated due to the challenges of GUI development for LLMs in C++ and, more broadly, in compiled languages like Rust and Zig. 
-First, build three libraries—Tex_AST_v2, md_lexer_v2, and highlight—using make; then build the main application via cmake or Qt Creator. The highlight library provides syntax highlighting for C/C++, Bash, CMake, Make, CSS, GLSL, HTML, JavaScript, JSON, Rust, Zig, XML, and DTD, and builds even without tree-sitter: in that case it acts as a no-op stub, and the application still builds and runs without highlighting.
+# md_view
 
-Used gpt-5.6-luna; gpt-6-luna; deepseek-v4.1-flash; koda editor (https://kodacode.ru/, koda-base model). Also a little bit: deepseek-v4-pro; gpt-5.6-terra; laguna-xs-2.1.
+`md_view` — лёгкий редактор Markdown на C++ и Qt 6. Он отображает Markdown-документы, математические формулы и подсвеченные блоки исходного кода. Просмотр Markdown включается через контекстное меню по правой кнопке мыши.
+Проект создан как альтернатива тайпскрипт стеку для отображения md.
+packer.sh для формирования линукс дистрибутива который зависит только от Qt6; 
+run.sh - скрипт для хапуска релизной версии из корня проекта.
+/build/Release_min_size/setup_mdview.sh - скрипт для привязки Release_min_size сборки в качестве средства для открытия md файлов
+
+## Возможности
+
+- редактирование и просмотр Markdown;
+- синхронизация исходного текста и предварительного просмотра;
+- отображение формул LaTeX;
+- подсветка синтаксиса C, C++, Bash, CMake, Make, CSS, GLSL, HTML, JavaScript, JSON, Rust, Zig, XML и DTD;
+- кнопка копирования содержимого fenced-блоков кода;
+- ограничение высоты длинных блоков кода с прокруткой;
+- поиск по исходному тексту с поддержкой близких вариантов написания;
+- небольшой размер готового приложения.
+
+## Зависимости
+
+Для сборки необходимы:
+
+- C++11-совместимый компилятор;
+- CMake версии 3.5 или новее;
+- GNU Make или другая система сборки, поддерживаемая CMake;
+- Qt 6 с модулями:
+  - `Qt6::Widgets`;
+
+Для Debian/Ubuntu зависимости можно установить так:
+
+```bash
+sudo apt install build-essential cmake qt6-base-dev qt6-webengine-dev
+```
+
+Если используется другой дистрибутив, установите соответствующие пакеты Qt 6 Base и Qt 6 WebEngine из его репозитория.
+
+### Подсветка синтаксиса
+
+Библиотека `highlight` может собираться с tree-sitter или без него. При наличии tree-sitter используется настоящая подсветка синтаксиса. Если tree-sitter недоступен, библиотека собирается с резервной реализацией, и приложение продолжает работать без подсветки.
+
+
+## Сборка
+
+Сначала соберите три внутренние библиотеки:
+
+```bash
+cd Tex_AST_v2
+make
+
+cd ../md_lexer_v2
+make
+
+cd ../highlight
+make
+```
+
+Затем из корня проекта сконфигурируйте и соберите основное приложение:
+
+```bash
+cd ..
+cmake -S . -B build
+cmake --build build -j"$(nproc)"
+```
+
+Исполняемый файл будет создан по адресу:
+
+```text
+build/md_view
+```
+
+Для повторной сборки после изменения исходников достаточно выполнить:
+
+```bash
+cmake --build build -j"$(nproc)"
+```
+
+Проект также можно открыть в Qt Creator, указав корневой файл `CMakeLists.txt`.
+
+## Запуск
+
+Из корня проекта приложение можно запустить скриптом:
+
+```bash
+./run.sh
+```
+
+Либо напрямую:
+
+```bash
+./build/md_view
+```
+
+Для отдельного предпросмотра SVG и HTML используется Qt WebEngine. При нажатии кнопки «Открыть» рядом с кнопкой «Копировать» содержимое fenced-блока открывается в отдельном окне.
+
+## Структура проекта
+
+- `md_lexer_v2/` — Markdown-лексер и парсер;
+- `Tex_AST_v2/` — разбор и рендеринг математических формул;
+- `highlight/` — подсветка исходного кода;
+- `MarkdownHtmlRenderer.*` — преобразование Markdown в HTML для предварительного просмотра;
+- `MarkdownCodeBlocks.*` — кнопки и виджеты fenced-блоков кода;
+- `MarkdownGraphicsView.*` — графическое представление предварительного просмотра;
+- `editorwidget.*` — редактор, просмотр и переключение режимов.
+
+## Ограничения
+
+Рендеринг формул в основном корректен, но отдельные сложные выражения могут отображаться с небольшими неточностями. Предпросмотр HTML и SVG выполняется движком Qt WebEngine; содержимое блока загружается локально и не является полноценной системой сборки веб-приложений.
+
+## Благодарности
+
+При разработке использовались модели `gpt-5.6-luna`, `gpt-6-luna`, `deepseek-v4.1-flash`, `deepseek-v4-pro`, `gpt-5.6-terra`, `laguna-xs-2.1`, а также редактор Koda: <https://kodacode.ru/>.
