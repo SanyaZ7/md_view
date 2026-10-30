@@ -23,6 +23,7 @@ Settings loadSettings()
     s.codeBlockMaxLines    = qMax(8, ini.value("view/codeBlockMaxLines", 20).toInt());
 
     s.dropFilesAsPaths   = ini.value("view/dropFilesAsPaths", false).toBool();
+    s.tabStopWidth       = qBound(1, ini.value("view/tabStopWidth", 4).toInt(), 16);
     return s;
 }
 
@@ -37,5 +38,6 @@ void saveSettings(const Settings &s)
     ini.setValue("view/codeBlockMaxLines",    qMax(8, s.codeBlockMaxLines));
 
     ini.setValue("view/dropFilesAsPaths", s.dropFilesAsPaths);
+    ini.setValue("view/tabStopWidth", qBound(1, s.tabStopWidth, 16));
     ini.sync();
 }

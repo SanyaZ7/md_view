@@ -549,8 +549,12 @@ void EditorWidget::applySettings(const Settings &settings)
     m_editor->setLineNumberAreaVisible(
         settings.lineNumbers);
 
+    m_editor->setTabStopDistance(
+        tabStopDistance(m_editor->font(), settings.tabStopWidth));
+
     m_markdownView->setCodeBlockMaxLines(
         settings.limitCodeBlockHeight ? qMax(8, settings.codeBlockMaxLines) : 0);
+    m_markdownView->setTabStopWidth(settings.tabStopWidth);
 
     m_editor->setDropFilesAsPaths(settings.dropFilesAsPaths);
 

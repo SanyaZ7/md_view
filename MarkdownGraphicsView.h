@@ -41,6 +41,10 @@ public:
     void setCodeBlockMaxLines(int lines);
     int codeBlockMaxLines() const;
 
+    // Ширина табуляции в пробелах для блоков кода в превью.
+    void setTabStopWidth(int width);
+    int tabStopWidth() const;
+
 signals:
     void renderModeRequested(bool enabled);
 
@@ -88,6 +92,12 @@ private:
         const std::vector<MarkdownUtils::CodeBlockInfo>& codes);
 
     int code_block_max_lines_ = 0; // 0 = без ограничения
+
+    /* Ширина табуляции в пробелах для блоков кода (по умолчанию 4). */
+    int tab_stop_width_ = 4;
+
+    /* Применяет tab_stop_width_ ко всем текущим блокам кода. */
+    void applyTabStopDistanceToCodeBlocks();
 
     struct CopyButton {
         QPushButton* button = nullptr;

@@ -68,6 +68,17 @@ int MarkdownGraphicsView::codeBlockMaxLines() const
     return code_block_max_lines_;
 }
 
+void MarkdownGraphicsView::setTabStopWidth(int width)
+{
+    tab_stop_width_ = qBound(1, width, 16);
+    applyTabStopDistanceToCodeBlocks();
+}
+
+int MarkdownGraphicsView::tabStopWidth() const
+{
+    return tab_stop_width_;
+}
+
 bool MarkdownGraphicsView::renderMode() const
 {
     return render_mode_;

@@ -12,6 +12,9 @@ struct Settings
     int  codeBlockMaxLines    = 20;
 
     bool dropFilesAsPaths   = false;
+
+    // Ширина табуляции в пробелах (применяется и в редакторе, и в блоках кода).
+    int  tabStopWidth         = 4;
 };
 
 // Путь к файлу настроек (в папке проекта)

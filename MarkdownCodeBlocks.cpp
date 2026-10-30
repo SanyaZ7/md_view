@@ -1,6 +1,7 @@
 #include "MarkdownCodeBlocks.h"
 
 #include "CodeBlockEditor.h"
+#include "FontUtils.h"
 #include "MarkdownGraphicsView.h"
 #include <QClipboard>
 #include <QApplication>
@@ -290,6 +291,8 @@ void MarkdownGraphicsView::createScrollableCodeBlocks(
         editor->setPlainText(code);
         editor->setReadOnly(true);
         editor->setFont(code_font_);
+        editor->setTabStopDistance(
+            tabStopDistance(code_font_, tab_stop_width_));
         editor->setLineWrapMode(QPlainTextEdit::NoWrap);
         editor->setVerticalScrollBarPolicy(
             Qt::ScrollBarAsNeeded);
@@ -441,5 +444,15 @@ void MarkdownGraphicsView::applyCodeBlockHeights(
      * перерисовки item. В обычном режиме эта ветка не выполняется.
      */
     text_item_->update();
+}
+
+void MarkdownGraphicsView::applyTabStopDistanceToCodeBlocks()
+{
+    const qreal distance = tabStopDistance(code_font_, tab_stop_width_);
+    for (CodeBlockEditor* editor : code_blocks_) {
+        if (editor) {
+            editor->setTabStopDistance(distance);
+        }
+    }
 }
 

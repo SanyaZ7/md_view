@@ -30,6 +30,7 @@ void SettingsDialog::loadFromSettings(const Settings &s)
 {
     ui->chkLineNumbers->setChecked(s.lineNumbers);
     ui->chkWordWrap->setChecked(s.wordWrap);
+    ui->spinTabStopWidth->setValue(qBound(1, s.tabStopWidth, 16));
 
     ui->chkLimitCodeBlockHeight->setChecked(s.limitCodeBlockHeight);
     ui->spinCodeBlockMaxLines->setValue(qMax(8, s.codeBlockMaxLines));
@@ -41,6 +42,7 @@ void SettingsDialog::saveToSettings(Settings &s) const
 {
     s.lineNumbers = ui->chkLineNumbers->isChecked();
     s.wordWrap    = ui->chkWordWrap->isChecked();
+    s.tabStopWidth = qBound(1, ui->spinTabStopWidth->value(), 16);
 
     s.limitCodeBlockHeight = ui->chkLimitCodeBlockHeight->isChecked();
     s.codeBlockMaxLines    = qMax(8, ui->spinCodeBlockMaxLines->value());

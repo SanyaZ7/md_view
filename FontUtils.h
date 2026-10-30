@@ -2,6 +2,7 @@
 #define FONT_UTILS_H
 
 #include <QFont>
+#include <QFontMetricsF>
 #include <QtGlobal>
 
 inline QFont make_code_font(int point_size = -1)
@@ -23,6 +24,20 @@ inline QFont make_code_font(int point_size = -1)
 #endif
 
     return font;
+}
+
+/*
+ * Ширина табуляции в пикселях для QPlainTextEdit::setTabStopDistance.
+ *
+ * QPlainTextEdit принимает расстояние, а не количество пробелов, поэтому
+ * ширина пробела берётся из метрик моноширинного шрифта редактора.
+ */
+inline qreal tabStopDistance(const QFont &font, int tabStopWidth)
+{
+    const int spaces = tabStopWidth > 0 ? tabStopWidth : 4;
+    const qreal spaceWidth =
+        QFontMetricsF(font).horizontalAdvance(QLatin1Char(' '));
+    return spaceWidth * spaces;
 }
 
 #endif // FONT_UTILS_H

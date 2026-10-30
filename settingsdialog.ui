@@ -42,6 +42,43 @@
     </widget>
    </item>
    <item>
+    <layout class="QHBoxLayout" name="tabStopLayout">
+     <item>
+      <widget class="QLabel" name="labelTabStopWidth">
+       <property name="text">
+        <string>Табуляция, пробелов:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSpinBox" name="spinTabStopWidth">
+       <property name="minimum">
+        <number>1</number>
+       </property>
+       <property name="maximum">
+        <number>16</number>
+       </property>
+       <property name="value">
+        <number>4</number>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="tabStopTail">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item>
     <widget class="QCheckBox" name="chkLimitCodeBlockHeight">
      <property name="text">
       <string>Ограничивать высоту блоков кода</string>
